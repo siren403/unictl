@@ -1,0 +1,35 @@
+{
+  "name": "unictl",
+  "version": "0.1.0",
+  "description": "Use unictl to connect Codex with Unity editor install, doctor, and lifecycle workflows.",
+  "author": {
+    "name": "unictl"
+  },
+  "homepage": "https://github.com/OWNER/REPO",
+  "repository": "https://github.com/OWNER/REPO",
+  "license": "MIT",
+  "keywords": [
+    "unity",
+    "unictl",
+    "codex",
+    "editor"
+  ],
+  "interface": {
+    "displayName": "unictl",
+    "shortDescription": "Connect Codex to Unity through unictl",
+    "longDescription": "Install unictl into Unity projects, run doctor and editor lifecycle checks, and execute built-in editor workflows through a thin Codex wrapper.",
+    "developerName": "unictl",
+    "category": "Coding",
+    "capabilities": [
+      "Interactive",
+      "Write"
+    ],
+    "websiteURL": "https://github.com/OWNER/REPO",
+    "privacyPolicyURL": "https://github.com/OWNER/REPO",
+    "termsOfServiceURL": "https://github.com/OWNER/REPO",
+    "defaultPrompt": [
+      "Connect to a Unity project with unictl and run doctor before editing"
+    ],
+    "brandColor": "#1F6FEB"
+  }
+}

@@ -1,0 +1,12 @@
+{
+  "name": "@unictl/cli",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "unictl": "./src/cli.ts"
+  },
+  "dependencies": {
+    "citty": "^0.2.1"
+  }
+}

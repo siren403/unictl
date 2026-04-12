@@ -1,0 +1,24 @@
+{
+  "lockfileVersion": 1,
+  "configVersion": 1,
+  "workspaces": {
+    "": {
+      "name": "unictl",
+    },
+    "packages/cli": {
+      "name": "@unictl/cli",
+      "version": "0.1.0",
+      "bin": {
+        "unictl": "./src/cli.ts",
+      },
+      "dependencies": {
+        "citty": "^0.2.1",
+      },
+    },
+  },
+  "packages": {
+    "@unictl/cli": ["@unictl/cli@workspace:packages/cli"],
+
+    "citty": ["citty@0.2.1", "", {}, "sha512-kEV95lFBhQgtogAPlQfJJ0WGVSokvLr/UEoFPiKKOXF7pl98HfUVUD0ejsuTCld/9xH9vogSywZ5KqHzXrZpqg=="],
+  }
+}
