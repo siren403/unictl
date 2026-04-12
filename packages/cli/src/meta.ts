@@ -31,7 +31,7 @@ function findRepoRoot(from: string): string {
 
 const repoRoot = findRepoRoot(runtimeDir);
 const rootPackageJsonPath = join(repoRoot, "package.json");
-const embeddedCorePackagePath = join(repoRoot, "packages", "upm", "com.unictl.core");
+const embeddedEditorPackagePath = join(repoRoot, "packages", "upm", "com.unictl.editor");
 
 export function getCliPackageMeta(): PackageMeta & { packageJsonPath: string } {
   const pkg = readJsonFile<PackageMeta>(rootPackageJsonPath);
@@ -41,12 +41,12 @@ export function getCliPackageMeta(): PackageMeta & { packageJsonPath: string } {
   };
 }
 
-export function getEmbeddedCorePackagePath(): string {
-  return embeddedCorePackagePath;
+export function getEmbeddedEditorPackagePath(): string {
+  return embeddedEditorPackagePath;
 }
 
-export function getEmbeddedCorePackageVersion(): string | null {
-  const packagePath = join(embeddedCorePackagePath, "package.json");
+export function getEmbeddedEditorPackageVersion(): string | null {
+  const packagePath = join(embeddedEditorPackagePath, "package.json");
   if (!existsSync(packagePath)) return null;
 
   const pkg = readJsonFile<PackageMeta>(packagePath);

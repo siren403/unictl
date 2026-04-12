@@ -5,7 +5,7 @@
   "files": [
     "dist/",
     "VERSION",
-    "packages/upm/com.unictl.core/",
+    "packages/upm/com.unictl.editor/",
     "docs/standalone/",
     "integrations/"
   ],

@@ -6,7 +6,7 @@
 
 - root package: GitHub tag-pinned `bunx` 진입점
 - `packages/cli`: CLI source
-- `packages/upm/com.unictl.core`: Unity UPM core package
+- `packages/upm/com.unictl.editor`: Unity UPM editor package
 - `native/unictl_native`: Rust native bridge
 - `integrations/`: Codex / Claude Code thin wrapper source
 

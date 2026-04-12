@@ -8,7 +8,7 @@
 
 - `0.1.x`의 canonical release root는 별도 `unictl` 저장소다.
 - Queenzle 저장소는 `unictl`의 소비자이자 dogfooding 환경이다.
-- Queenzle 내부 `unictl/`, `Packages/upm/com.unictl.core`, `dist/`, 루트 `package.json`은 feasibility 검증 흔적일 뿐, 최종 릴리스 루트가 아니다.
+- Queenzle 내부 `unictl/`, `Packages/upm/com.unictl.editor`, `dist/`, 루트 `package.json`은 feasibility 검증 흔적일 뿐, 최종 릴리스 루트가 아니다.
 - 새 저장소 이름 기본값은 `unictl`로 고정한다.
 
 ## 2. Repo Ownership Matrix
@@ -20,7 +20,7 @@
 | `/dist/` | built CLI artifact | generated | yes | root shim이 참조 |
 | `/docs/standalone/` | shared product docs | source | yes | integrations가 여기서 파생 |
 | `/packages/cli/` | CLI source | source | no | 배포 표면이 아니라 구현 소스 |
-| `/packages/upm/com.unictl.core/` | core UPM package | source | yes | 유일한 public core UPM package |
+| `/packages/upm/com.unictl.editor/` | core UPM package | source | yes | 유일한 public core UPM package |
 | `/native/unictl_native/` | Rust native crate | source | no | platform artifact source |
 | `/integrations/codex/` | Codex thin wrapper pack | source + generated | yes | 공통 문서 재포장만 담당 |
 | `/integrations/claude-code/` | Claude Code thin wrapper pack | source + generated | yes | 공통 문서 재포장만 담당 |
@@ -82,7 +82,7 @@ Version write order:
 | `list` | required | built-in + project-local tool schema 반환 | unknown/transport error면 non-zero |
 | `version` | required | CLI version과 source metadata 반환 | version metadata missing이면 non-zero |
 | `doctor` | required | install, endpoint, version drift, transport 상태 진단 | any failed check면 non-zero |
-| `init` | required | `manifest.json`에 `com.unictl.core` 항목 추가 또는 갱신 | destructive change 필요시 non-zero |
+| `init` | required | `manifest.json`에 `com.unictl.editor` 항목 추가 또는 갱신 | destructive change 필요시 non-zero |
 | `editor status` | required | running, pid, endpoint, health 요약 반환 | transport read 실패면 non-zero |
 | `editor open` | required | editor launch 후 ready endpoint 확인 | live session 존재 시 non-zero |
 | `editor quit` | required | graceful quit 후 endpoint 제거 확인 | timeout or failure면 non-zero |
@@ -91,7 +91,7 @@ Version write order:
 
 ### 4.3 `init` semantics
 
-- `init`은 `com.unictl.core` 한 항목만 관리한다.
+- `init`은 `com.unictl.editor` 한 항목만 관리한다.
 - `init`은 idempotent해야 한다.
 - unrelated dependency와 registry 설정은 보존해야 한다.
 - `init --dry-run`과 `init --force`를 제공한다.
@@ -101,7 +101,8 @@ Version write order:
 
 ### 5.1 Public package
 
-- public package는 `com.unictl.core` 하나만 둔다.
+- public package는 `com.unictl.editor` 하나만 둔다.
+- product name은 `unictl`, public UPM package id는 `com.unictl.editor`, display name은 `Unictl Editor`로 고정한다.
 - fresh Unity project에 설치 가능해야 한다.
 - `0.1.x` core package는 `com.unity.test-framework`에 의존하지 않는다.
 - 플랫폼별 native plugin은 core package 내부에 동봉한다.
@@ -189,7 +190,7 @@ Required fields:
 
 ## 8. Definition of Done for 0.1.0
 
-- fresh Unity project가 `com.unictl.core` 설치만으로 compile된다.
+- fresh Unity project가 `com.unictl.editor` 설치만으로 compile된다.
 - macOS와 Windows x64에서 `bunx github:OWNER/REPO#v0.1.0 health`가 동작한다.
 - `editor open`, `editor status`, `editor quit`, `editor restart`가 두 플랫폼에서 동작한다.
 - `doctor`가 CLI, UPM, native version drift를 실패로 보고한다.

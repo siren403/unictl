@@ -6,7 +6,7 @@
 
 ## 1. Critical Path
 
-가장 먼저 고정해야 하는 것은 `standalone repo root + VERSION fan-out + GitHub direct bunx root shim`이다. 그 다음이 `.unictl/endpoint.json` 중심 transport abstraction이고, 이후 `com.unictl.core` 추출, CLI 제품화, integrations, release automation skeleton을 macOS 기준으로 먼저 안정화한다. Windows x64 지원은 마지막 phase에서 붙여서 최종 release gate를 닫는다.
+가장 먼저 고정해야 하는 것은 `standalone repo root + VERSION fan-out + GitHub direct bunx root shim`이다. 그 다음이 `.unictl/endpoint.json` 중심 transport abstraction이고, 이후 `com.unictl.editor` 추출, CLI 제품화, integrations, release automation skeleton을 macOS 기준으로 먼저 안정화한다. Windows x64 지원은 마지막 phase에서 붙여서 최종 release gate를 닫는다.
 
 ## 2. Working Assumptions
 
@@ -98,7 +98,7 @@ Dependencies:
 Tasks:
 
 - `Assets/Editor/Unictl`에서 core package로 옮길 파일 목록을 확정한다.
-- `com.unictl.core` package layout과 asmdef 경계를 만든다.
+- `com.unictl.editor` package layout과 asmdef 경계를 만든다.
 - core built-ins 4개만 package-provided stable built-in으로 정리한다.
 - `com.unity.test-framework` 의존성이 core package에서 빠지도록 테스트/자동화 경계를 분리한다.
 - macOS native plugin을 package 경로에 먼저 배치한다.
@@ -106,7 +106,7 @@ Tasks:
 
 Exit criteria:
 
-- fresh Unity project가 `com.unictl.core` 설치만으로 compile되고 core built-ins를 로드한다.
+- fresh Unity project가 `com.unictl.editor` 설치만으로 compile되고 core built-ins를 로드한다.
 
 ## 7. Epic E: CLI Productization
 
@@ -234,7 +234,7 @@ Exit criteria:
 - stale recovery 초안
 
 5. Day 5
-- `com.unictl.core` package layout 생성
+- `com.unictl.editor` package layout 생성
 - core built-ins 4개 분리
 
 6. Day 6

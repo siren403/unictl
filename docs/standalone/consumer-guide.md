@@ -16,7 +16,7 @@
 소비자 프로젝트 입장에서는 아래 두 축으로 생각하면 된다.
 
 1. Unity 프로젝트 안에 들어가는 것
-- UPM 패키지 `com.unictl.core`
+- UPM 패키지 `com.unictl.editor`
 - built-in `UnictlTool`
 - 플랫폼별 native plugin
 
@@ -34,23 +34,30 @@
 
 ## 3. 설치 구조
 
+명칭 규칙:
+
+- 제품 이름은 `unictl`이다.
+- Unity 프로젝트가 설치하는 public UPM package id는 `com.unictl.editor`다.
+- Unity Package Manager에서 보이는 이름은 `Unictl Editor`로 고정한다.
+- 작업자 머신에서 실행하는 CLI 이름은 `unictl`이다.
+
 ### 3.1 프로젝트 설치
 
-소비자 프로젝트는 `Packages/manifest.json`에 `com.unictl.core`를 추가한다.
+소비자 프로젝트는 `Packages/manifest.json`에 `com.unictl.editor`를 추가한다.
 
 목표 형태:
 
 ```json
 {
   "dependencies": {
-    "com.unictl.core": "REPO_GIT_URL.git?path=/packages/upm/com.unictl.core#vX.Y.Z"
+    "com.unictl.editor": "REPO_GIT_URL.git?path=/packages/upm/com.unictl.editor#vX.Y.Z"
   }
 }
 ```
 
 원칙:
 
-- `com.unictl.core`가 Unity 프로젝트 안의 기본 서버와 built-in tool을 제공한다.
+- `com.unictl.editor`는 Unity 프로젝트 안의 editor package이며, 기본 서버와 built-in tool을 제공한다.
 - 프로젝트 고유 명령은 소비자 프로젝트가 자체 `[UnictlTool]` 클래스로 추가한다.
 
 ### 3.2 CLI 사용
@@ -166,7 +173,7 @@ bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
 
 ### 7.2 `init` 재실행
 
-`init`은 `com.unictl.core` 항목만 관리하는 보수적 명령으로 본다.
+`init`은 `com.unictl.editor` 항목만 관리하는 보수적 명령으로 본다.
 
 원칙:
 
@@ -183,7 +190,7 @@ bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
 
 ```bash
 bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --repo-url https://github.com/OWNER/REPO --dry-run
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --package-ref file:/ABS/PATH/TO/packages/upm/com.unictl.core --dry-run
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --package-ref file:/ABS/PATH/TO/packages/upm/com.unictl.editor --dry-run
 ```
 
 ## 8. 플랫폼 메모
