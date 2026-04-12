@@ -74,8 +74,10 @@ export function parsePackageReference(
 
   if (reference.startsWith("file:")) {
     const rawPath = reference.slice(5);
-    const { projectRoot } = getProjectPaths(projectPath);
-    const resolvedPath = rawPath.startsWith("/") ? rawPath : resolve(projectRoot, rawPath);
+    const manifestPath = getManifestPath(projectPath);
+    const resolvedPath = rawPath.startsWith("/")
+      ? rawPath
+      : resolve(manifestPath, "..", rawPath);
     return {
       kind: "file",
       source: reference,
