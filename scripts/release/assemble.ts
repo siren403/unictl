@@ -135,8 +135,8 @@ function packZip(stageDir: string, artifactPath: string): void {
 function packUpm(outputRoot: string, version: string): string {
   const repoRoot = getRepoRoot();
   const packageParent = join(repoRoot, "packages", "upm");
-  const artifactPath = join(outputRoot, `com.unictl.core-${version}.tgz`);
-  runCheckedCommand(["tar", "-czf", artifactPath, "com.unictl.core"], {
+  const artifactPath = join(outputRoot, `com.unictl.editor-${version}.tgz`);
+  runCheckedCommand(["tar", "-czf", artifactPath, "com.unictl.editor"], {
     cwd: packageParent,
   });
   return artifactPath;

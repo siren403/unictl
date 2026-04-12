@@ -15,7 +15,7 @@
 중요:
 
 - `0.1.x`의 canonical release root는 Queenzle 저장소 루트가 아니라 별도 `unictl` 저장소 루트다.
-- 현재 Queenzle 내부의 `unictl/`, `Packages/upm/com.unictl.core`, `dist/`, 루트 `package.json`은 제품화 전 feasibility 검증용 임베디드 프로토타입이다.
+- 현재 Queenzle 내부의 `unictl/`, `Packages/upm/com.unictl.editor`, `dist/`, 루트 `package.json`은 제품화 전 feasibility 검증용 임베디드 프로토타입이다.
 - Queenzle는 `0.1.x` 동안 dogfooding 소비자 프로젝트로만 취급한다.
 
 ## 1. 목표 산출물
@@ -27,7 +27,8 @@
    - 소스 오브 트루스와 릴리스 허브는 GitHub 저장소
 
 2. `UPM 패키지`
-   - 패키지명: `com.unictl.core`
+   - 패키지명: `com.unictl.editor`
+   - 표시명: `Unictl Editor`
    - 포함 범위:
      - `[UnictlTool]`
      - 기본 제공 `UnictlTool`
@@ -183,7 +184,7 @@ repo/
 
 패키지명:
 
-- `com.unictl.core`
+- `com.unictl.editor`
 
 포함 범위:
 
@@ -208,7 +209,7 @@ repo/
 ```json
 {
   "dependencies": {
-    "com.unictl.core": "REPO_GIT_URL.git?path=/packages/upm/com.unictl.core#vX.Y.Z"
+    "com.unictl.editor": "REPO_GIT_URL.git?path=/packages/upm/com.unictl.editor#vX.Y.Z"
   }
 }
 ```
@@ -299,7 +300,7 @@ repo/
 ├── package.json               # root executable shim for GitHub+bunx
 ├── packages/
 │   ├── cli/                    # bunx 진입점
-│   └── upm/com.unictl.core/    # UPM 패키지
+│   └── upm/com.unictl.editor/    # UPM 패키지
 ├── native/
 │   └── unictl_native/          # Rust crate + platform build scripts
 ├── integrations/
@@ -554,7 +555,7 @@ UPM 패키지 안에 아래를 포함한다.
 
 설치:
 
-- `bunx github:OWNER/REPO#vX.Y.Z init`가 `manifest.json`에 `com.unictl.core` Git URL 항목을 추가 또는 갱신한다.
+- `bunx github:OWNER/REPO#vX.Y.Z init`가 `manifest.json`에 `com.unictl.editor` Git URL 항목을 추가 또는 갱신한다.
 - fresh project 기준으로 추가 설정 없이 built-in tools가 로드되어야 한다.
 
 업데이트:
@@ -657,7 +658,7 @@ GitHub release asset 이름은 아래로 고정한다.
 
 - `release-manifest.json`
 - `SHA256SUMS`
-- `com.unictl.core-X.Y.Z.tgz`
+- `com.unictl.editor-X.Y.Z.tgz`
 - `codex-plugin-X.Y.Z.zip`
 - `claude-code-support-X.Y.Z.zip`
 - `unictl_native-macos-x64-or-universal.tar.gz`
@@ -684,7 +685,7 @@ promotion gate:
 
 목적:
 
-- fresh Unity project에서 `com.unictl.core`가 local package reference만으로 resolve되고 compile되는지 확인
+- fresh Unity project에서 `com.unictl.editor`가 local package reference만으로 resolve되고 compile되는지 확인
 
 검증 방법:
 
@@ -698,14 +699,14 @@ manifest 예시:
 ```json
 {
   "dependencies": {
-    "com.unictl.core": "file:/ABS/PATH/TO/packages/upm/com.unictl.core"
+    "com.unictl.editor": "file:/ABS/PATH/TO/packages/upm/com.unictl.editor"
   }
 }
 ```
 
 성공 기준:
 
-- `com.unictl.core`가 local package로 등록된다
+- `com.unictl.editor`가 local package로 등록된다
 - package dependency가 자동 resolve된다
 - compile error 없이 batchmode가 종료된다
 
@@ -775,7 +776,7 @@ bunx --package file:/ABS/PATH/TO/unictl-preflight.tgz unictl editor status --pro
 작업:
 
 - 현재 `Assets/Editor/Unictl` 정리
-- `com.unictl.core` 패키지 구성
+- `com.unictl.editor` 패키지 구성
 - built-in tools 포함
 - macOS native binaries 포함
 - package dependencies 선언
@@ -846,7 +847,7 @@ bunx --package file:/ABS/PATH/TO/unictl-preflight.tgz unictl editor status --pro
 
 아래가 모두 만족되면 단독배포 1차 완료로 본다.
 
-1. 새 Unity 프로젝트에서 `com.unictl.core` 설치 후 built-in tools가 로드된다.
+1. 새 Unity 프로젝트에서 `com.unictl.editor` 설치 후 built-in tools가 로드된다.
 2. macOS와 Windows x64에서 `bunx github:OWNER/REPO#vX.Y.Z health`가 동작한다.
 3. `bunx github:OWNER/REPO#vX.Y.Z editor open/status/quit`이 두 플랫폼에서 동작한다.
 4. `doctor`가 CLI/UPM/native 버전 불일치를 감지한다.

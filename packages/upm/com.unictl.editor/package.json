@@ -1,0 +1,16 @@
+{
+  "name": "com.unictl.editor",
+  "version": "0.1.0",
+  "displayName": "Unictl Editor",
+  "description": "Unity-side editor package for unictl. Provides the editor server, stable built-in tools, and native transport plugins consumed by the CLI.",
+  "unity": "6000.0",
+  "documentationUrl": "https://github.com/siren403/unictl/tree/main/docs/standalone",
+  "changelogUrl": "https://github.com/siren403/unictl/releases",
+  "author": {
+    "name": "unictl",
+    "url": "https://github.com/siren403/unictl"
+  },
+  "dependencies": {
+    "com.unity.nuget.newtonsoft-json": "3.2.1"
+  }
+}

@@ -1,6 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { getEmbeddedCorePackagePath } from "./meta";
+import { getEmbeddedEditorPackagePath } from "./meta";
 import { getProjectPaths } from "./socket";
 
 export type UnityManifest = {
@@ -38,11 +38,11 @@ export function writeProjectManifest(projectPath: string | undefined, manifest: 
 
 export function buildGitPackageReference(repoUrl: string, version: string): string {
   const normalizedRepoUrl = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`;
-  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.core#v${version}`;
+  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.editor#v${version}`;
 }
 
 export function getPrototypeLocalPackageReference(): string | null {
-  const packagePath = getEmbeddedCorePackagePath();
+  const packagePath = getEmbeddedEditorPackagePath();
   if (!existsSync(join(packagePath, "package.json"))) return null;
   return `file:${packagePath}`;
 }
@@ -90,4 +90,3 @@ export function parsePackageReference(
     version: null,
   };
 }
-

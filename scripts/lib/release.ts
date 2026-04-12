@@ -53,7 +53,7 @@ export function getVersionTargets(): VersionTarget[] {
   return [
     { name: "root-package", path: join(repoRoot, "package.json") },
     { name: "cli-package", path: join(repoRoot, "packages", "cli", "package.json") },
-    { name: "upm-core-package", path: join(repoRoot, "packages", "upm", "com.unictl.core", "package.json") },
+    { name: "upm-editor-package", path: join(repoRoot, "packages", "upm", "com.unictl.editor", "package.json") },
     { name: "codex-plugin-config", path: join(repoRoot, "integrations", "codex", "plugin.config.json") },
     { name: "claude-support-config", path: join(repoRoot, "integrations", "claude-code", "support-pack.json") },
   ];

@@ -775,7 +775,7 @@ function findRepoRoot(from) {
 }
 var repoRoot = findRepoRoot(runtimeDir);
 var rootPackageJsonPath = join3(repoRoot, "package.json");
-var embeddedCorePackagePath = join3(repoRoot, "packages", "upm", "com.unictl.core");
+var embeddedEditorPackagePath = join3(repoRoot, "packages", "upm", "com.unictl.editor");
 function getCliPackageMeta() {
   const pkg = readJsonFile(rootPackageJsonPath);
   return {
@@ -783,11 +783,11 @@ function getCliPackageMeta() {
     packageJsonPath: rootPackageJsonPath
   };
 }
-function getEmbeddedCorePackagePath() {
-  return embeddedCorePackagePath;
+function getEmbeddedEditorPackagePath() {
+  return embeddedEditorPackagePath;
 }
-function getEmbeddedCorePackageVersion() {
-  const packagePath = join3(embeddedCorePackagePath, "package.json");
+function getEmbeddedEditorPackageVersion() {
+  const packagePath = join3(embeddedEditorPackagePath, "package.json");
   if (!existsSync3(packagePath))
     return null;
   const pkg = readJsonFile(packagePath);
@@ -816,10 +816,10 @@ function writeProjectManifest(projectPath, manifest) {
 }
 function buildGitPackageReference(repoUrl, version) {
   const normalizedRepoUrl = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`;
-  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.core#v${version}`;
+  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.editor#v${version}`;
 }
 function getPrototypeLocalPackageReference() {
-  const packagePath = getEmbeddedCorePackagePath();
+  const packagePath = getEmbeddedEditorPackagePath();
   if (!existsSync4(join4(packagePath, "package.json")))
     return null;
   return `file:${packagePath}`;
@@ -930,7 +930,7 @@ function getVersionInfo() {
       package_name: cliPackage.name,
       cli_version: cliPackage.version,
       package_json_path: cliPackage.packageJsonPath,
-      embedded_core_version: getEmbeddedCorePackageVersion(),
+      embedded_editor_version: getEmbeddedEditorPackageVersion(),
       runtime: "bun"
     }
   };
@@ -965,20 +965,20 @@ async function runDoctor(projectPath) {
       const manifestPath = getManifestPath(projectRoot);
       const manifest = readProjectManifest(projectRoot);
       checks.push(createCheck("manifest", true, "info", "Unity manifest loaded.", { manifest_path: manifestPath }));
-      const dependencyRef = manifest.dependencies?.["com.unictl.core"];
+      const dependencyRef = manifest.dependencies?.["com.unictl.editor"];
       if (!dependencyRef) {
-        checks.push(createCheck("core_dependency", false, "error", "`com.unictl.core` dependency is missing from manifest.json."));
+        checks.push(createCheck("editor_package_dependency", false, "error", "`com.unictl.editor` dependency is missing from manifest.json."));
       } else {
         const parsedReference = parsePackageReference(dependencyRef, projectRoot);
-        checks.push(createCheck("core_dependency", true, "info", "`com.unictl.core` dependency is present.", parsedReference));
+        checks.push(createCheck("editor_package_dependency", true, "info", "`com.unictl.editor` dependency is present.", parsedReference));
         if (parsedReference.version) {
           const matchesCliVersion = parsedReference.version === cliPackage.version;
-          checks.push(createCheck("version_alignment", matchesCliVersion, matchesCliVersion ? "info" : "error", matchesCliVersion ? "CLI version and core package version align." : `CLI version ${cliPackage.version} does not match core package version ${parsedReference.version}.`, {
+          checks.push(createCheck("version_alignment", matchesCliVersion, matchesCliVersion ? "info" : "error", matchesCliVersion ? "CLI version and editor package version align." : `CLI version ${cliPackage.version} does not match editor package version ${parsedReference.version}.`, {
             cli_version: cliPackage.version,
-            core_version: parsedReference.version
+            editor_package_version: parsedReference.version
           }));
         } else {
-          checks.push(createCheck("version_alignment", false, "warn", "Core package reference is opaque, so exact version drift could not be verified.", { reference: dependencyRef }));
+          checks.push(createCheck("version_alignment", false, "warn", "Editor package reference is opaque, so exact version drift could not be verified.", { reference: dependencyRef }));
         }
       }
     } catch (error) {
@@ -1053,12 +1053,12 @@ function runInit(args) {
   }
   const manifest = readProjectManifest(projectRoot);
   const dependencies = ensureDependencies(manifest);
-  const currentReference = dependencies["com.unictl.core"] ?? null;
+  const currentReference = dependencies["com.unictl.editor"] ?? null;
   const desired = resolveInitReference(args);
   if (currentReference === desired.reference) {
     return {
       success: true,
-      message: "Manifest already contains the desired `com.unictl.core` reference.",
+      message: "Manifest already contains the desired `com.unictl.editor` reference.",
       data: {
         changed: false,
         dry_run: Boolean(args.dryRun),
@@ -1071,7 +1071,7 @@ function runInit(args) {
   if (currentReference && currentReference !== desired.reference && !args.force) {
     return {
       success: false,
-      message: "Existing `com.unictl.core` reference differs. Re-run with `--force` to replace it.",
+      message: "Existing `com.unictl.editor` reference differs. Re-run with `--force` to replace it.",
       data: {
         changed: false,
         dry_run: Boolean(args.dryRun),
@@ -1086,7 +1086,7 @@ function runInit(args) {
     ...manifest,
     dependencies: {
       ...dependencies,
-      "com.unictl.core": desired.reference
+      "com.unictl.editor": desired.reference
     }
   };
   if (!args.dryRun) {
@@ -1270,7 +1270,7 @@ var doctorCmd = defineCommand({
   }
 });
 var initCmd = defineCommand({
-  meta: { name: "init", description: "Add or update the `com.unictl.core` dependency in manifest.json" },
+  meta: { name: "init", description: "Add or update the `com.unictl.editor` dependency in manifest.json" },
   args: {
     project: {
       type: "string",
@@ -1296,7 +1296,7 @@ var initCmd = defineCommand({
     force: {
       type: "boolean",
       default: false,
-      description: "Replace an existing differing com.unictl.core reference"
+      description: "Replace an existing differing com.unictl.editor reference"
     }
   },
   run: async ({ args }) => {

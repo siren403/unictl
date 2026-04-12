@@ -545,7 +545,7 @@ CLI 수준의 에디터 라이프사이클 관리. sleep 폴링 최소화 설계
 
 **monorepo 구조로 전환:**
 - CLI: npm 패키지 (`bunx unictl` / `npx unictl`)
-- Unity: UPM 패키지 (`com.unictl.core`)
+- Unity: UPM 패키지 (`com.unictl.editor`)
 - 같은 리포, 같은 버전 번호
 
 **버전 동기화:**
