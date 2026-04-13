@@ -14,15 +14,6 @@ namespace Unictl
     [InitializeOnLoad]
     public static class UnictlServer
     {
-        private sealed class EndpointDescriptor
-        {
-            public int schema;
-            public string transport;
-            public string path;
-            public int pid;
-            public string projectRoot;
-        }
-
         private static UnictlNative.CommandHandlerDelegate _handlerRef;
         private static HttpListener _internalListener;
         private static int _internalListenerPort = -1;
@@ -66,20 +57,22 @@ namespace Unictl
 
                 StartInternalListener();
 
-                var sockPath = GetSocketPath();
-                var result = UnictlNative.unictl_start(sockPath);
+#if UNITY_EDITOR_WIN
+                var listenPath = GetPipeName();
+#else
+                var listenPath = GetSocketPath();
+#endif
+                var result = UnictlNative.unictl_start(listenPath);
 
                 _handlerRef = OnCommand;
                 UnictlNative.unictl_register_handler(_handlerRef);
-                WriteEndpointDescriptor(sockPath);
 
                 var count = UnictlNative.unictl_counter();
-                Debug.Log($"[unictl] server={result}, count={count}, sock={sockPath}, internal_port={_internalListenerPort}");
+                Debug.Log($"[unictl] server={result}, count={count}, path={listenPath}, internal_port={_internalListenerPort}");
             }
             catch (Exception e)
             {
                 StopInternalListener("startup failure");
-                DeleteEndpointDescriptor("startup failure");
                 Debug.LogError($"[unictl] Failed to start: {e.Message}");
             }
         }
@@ -93,7 +86,6 @@ namespace Unictl
 
         private static void OnEditorQuitting()
         {
-            DeleteEndpointDescriptor("editor quit");
             StopInternalListener("editor quit");
         }
 
@@ -279,73 +271,24 @@ namespace Unictl
             return Path.GetDirectoryName(Application.dataPath);
         }
 
-        private static string GetUnictlDirectory()
+#if UNITY_EDITOR_WIN
+        private static string GetPipeName()
         {
-            return Path.Combine(GetProjectRoot(), ".unictl");
+            var projectRoot = GetProjectRoot().Replace('\\', '/');
+            using var sha = System.Security.Cryptography.SHA256.Create();
+            var hash = sha.ComputeHash(System.Text.Encoding.UTF8.GetBytes(projectRoot));
+            var shortHash = BitConverter.ToString(hash, 0, 8).Replace("-", "").ToLowerInvariant();
+            return $@"\\.\pipe\unictl-{shortHash}";
         }
-
+#else
         private static string GetSocketPath()
         {
-            var unictlDir = GetUnictlDirectory();
+            var unictlDir = Path.Combine(GetProjectRoot(), ".unictl");
             if (!Directory.Exists(unictlDir))
                 Directory.CreateDirectory(unictlDir);
 
             return Path.Combine(unictlDir, "unictl.sock");
         }
-
-        private static string GetEndpointPath()
-        {
-            return Path.Combine(GetUnictlDirectory(), "endpoint.json");
-        }
-
-        private static void WriteEndpointDescriptor(string sockPath)
-        {
-            var unictlDir = GetUnictlDirectory();
-            if (!Directory.Exists(unictlDir))
-                Directory.CreateDirectory(unictlDir);
-
-            var endpoint = new EndpointDescriptor
-            {
-                schema = 1,
-                transport = "unix",
-                path = sockPath,
-                pid = System.Diagnostics.Process.GetCurrentProcess().Id,
-                projectRoot = GetProjectRoot()
-            };
-
-            var endpointPath = GetEndpointPath();
-            var tempPath = endpointPath + ".tmp";
-            File.WriteAllText(tempPath, JsonConvert.SerializeObject(endpoint));
-
-            if (File.Exists(endpointPath))
-            {
-                try
-                {
-                    File.Replace(tempPath, endpointPath, null);
-                    return;
-                }
-                catch
-                {
-                    File.Delete(endpointPath);
-                }
-            }
-
-            File.Move(tempPath, endpointPath);
-        }
-
-        private static void DeleteEndpointDescriptor(string reason)
-        {
-            var endpointPath = GetEndpointPath();
-            if (!File.Exists(endpointPath)) return;
-
-            try
-            {
-                File.Delete(endpointPath);
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning($"[unictl] failed to delete endpoint descriptor ({reason}): {e.Message}");
-            }
-        }
+#endif
     }
 }
