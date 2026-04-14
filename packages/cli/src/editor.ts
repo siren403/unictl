@@ -37,6 +37,21 @@ export type EditorStatusResult = {
   health: unknown | null;
 };
 
+function resolveUnityBinary(version: string): string {
+  if (process.platform === "win32") {
+    // Unity Hub default install paths on Windows
+    const candidates = [
+      `C:/Program Files/Unity/Hub/Editor/${version}/Editor/Unity.exe`,
+      `C:/Program Files (x86)/Unity/Hub/Editor/${version}/Editor/Unity.exe`,
+    ];
+    for (const candidate of candidates) {
+      if (existsSync(candidate)) return candidate;
+    }
+    return candidates[0]; // fallback — will trigger "not found" error
+  }
+  return `/Applications/Unity/Hub/Editor/${version}/Unity.app/Contents/MacOS/Unity`;
+}
+
 /** Parse m_EditorVersion from ProjectSettings/ProjectVersion.txt */
 function readUnityVersion(projectRoot: string): string {
   const versionFile = join(projectRoot, "ProjectSettings", "ProjectVersion.txt");
@@ -47,6 +62,13 @@ function readUnityVersion(projectRoot: string): string {
 }
 
 function listUnityProcesses(): UnityProcess[] {
+  if (process.platform === "win32") {
+    return listUnityProcessesWindows();
+  }
+  return listUnityProcessesMac();
+}
+
+function listUnityProcessesMac(): UnityProcess[] {
   const proc = Bun.spawnSync(["ps", "-axo", "pid=,command="]);
   const out = proc.stdout.toString();
 
@@ -68,8 +90,43 @@ function listUnityProcesses(): UnityProcess[] {
     });
 }
 
+function listUnityProcessesWindows(): UnityProcess[] {
+  // wmic gives us PID and full command line including -projectPath
+  const proc = Bun.spawnSync(["wmic", "process", "where",
+    "name='Unity.exe'", "get", "ProcessId,CommandLine", "/FORMAT:CSV"]);
+  const out = proc.stdout.toString();
+
+  return out
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .filter((line) => !line.startsWith("Node,"))  // skip CSV header
+    .map((line) => {
+      // CSV format: Node,CommandLine,ProcessId
+      const lastComma = line.lastIndexOf(",");
+      if (lastComma < 0) return null;
+      const pid = Number.parseInt(line.slice(lastComma + 1), 10);
+      // skip "Node," prefix, take everything up to last comma as command
+      const firstComma = line.indexOf(",");
+      const command = line.slice(firstComma + 1, lastComma);
+      if (Number.isNaN(pid)) return null;
+      return { pid, command };
+    })
+    .filter((proc): proc is UnityProcess => proc !== null);
+}
+
 function isBatchModeWorker(command: string): boolean {
   return command.includes(" -batchMode ") || command.includes("AssetImportWorker");
+}
+
+function killProcess(pid: number, force: boolean): void {
+  if (process.platform === "win32") {
+    const args = ["taskkill", "/PID", String(pid)];
+    if (force) args.push("/F");
+    Bun.spawnSync(args);
+  } else {
+    Bun.spawnSync(force ? ["kill", "-9", String(pid)] : ["kill", String(pid)]);
+  }
 }
 
 /** Get the main Unity editor PID for this project, returns null if not running. */
@@ -77,9 +134,13 @@ async function getUnityPid(projectPath?: string): Promise<number | null> {
   const projectRoot = getProjectRoot(projectPath);
   const processes = listUnityProcesses();
 
-  const matchingProject = processes.filter((proc) =>
-    proc.command.includes(`-projectPath ${projectRoot}`)
-  );
+  // Normalize path separators for cross-platform matching
+  const normalizedRoot = projectRoot.replace(/\\/g, "/");
+  const matchingProject = processes.filter((proc) => {
+    const normalizedCmd = proc.command.replace(/\\/g, "/");
+    return normalizedCmd.includes(`-projectPath ${normalizedRoot}`)
+      || normalizedCmd.includes(`-projectPath "${normalizedRoot}"`);
+  });
 
   const preferred = matchingProject.find((proc) => !isBatchModeWorker(proc.command));
   if (preferred) return preferred.pid;
@@ -184,11 +245,11 @@ export async function editorQuit(opts?: {
   // EditorApplication.Exit(0)가 unfocused에서 실행되지 않으므로 SIGTERM 폴백 필수
   const pid = await getUnityPid(opts?.project);
   if (pid !== null) {
-    Bun.spawnSync(["kill", String(pid)]);
+    killProcess(pid, false);
     await sleep(3_000);
     const stillRunning = await getUnityPid(opts?.project);
     if (stillRunning !== null) {
-      Bun.spawnSync(["kill", "-9", String(pid)]);
+      killProcess(pid, true);
       await sleep(1_000);
     }
   }
@@ -213,7 +274,7 @@ export async function editorOpen(opts?: { project?: string }): Promise<unknown> 
 
   // Determine Unity version and binary path
   const version = readUnityVersion(projectRoot);
-  const unityBin = `/Applications/Unity/Hub/Editor/${version}/Unity.app/Contents/MacOS/Unity`;
+  const unityBin = resolveUnityBinary(version);
 
   if (!existsSync(unityBin)) {
     throw new Error(`Unity binary not found: ${unityBin}`);
