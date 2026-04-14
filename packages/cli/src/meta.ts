@@ -17,8 +17,10 @@ function findRepoRoot(from: string): string {
   let dir = resolve(from);
 
   while (true) {
-    if (existsSync(join(dir, "package.json")) && existsSync(join(dir, "VERSION"))) {
-      return dir;
+    const pkgPath = join(dir, "package.json");
+    if (existsSync(pkgPath)) {
+      const pkg = readJsonFile<{ name?: string }>(pkgPath);
+      if (pkg.name === "unictl") return dir;
     }
 
     const parent = dirname(dir);

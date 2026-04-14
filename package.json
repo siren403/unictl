@@ -8,7 +8,6 @@
   "type": "module",
   "files": [
     "dist/",
-    "VERSION",
     "packages/upm/com.unictl.editor/",
     "docs/standalone/",
     "integrations/"
