@@ -36,9 +36,10 @@ export function writeProjectManifest(projectPath: string | undefined, manifest: 
   return manifestPath;
 }
 
-export function buildGitPackageReference(repoUrl: string, version: string): string {
+export function buildGitPackageReference(repoUrl: string, version?: string): string {
   const normalizedRepoUrl = repoUrl.endsWith(".git") ? repoUrl : `${repoUrl}.git`;
-  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.editor#v${version}`;
+  const fragment = version ? `#v${version}` : "";
+  return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.editor${fragment}`;
 }
 
 export function getPrototypeLocalPackageReference(): string | null {

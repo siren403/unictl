@@ -264,7 +264,7 @@ function resolveInitReference(args: {
   }
 
   if (args.repoUrl) {
-    const version = args.version ?? getCliPackageMeta().version;
+    const version = args.version; // undefined → HEAD (no tag pinning)
     return {
       reference: buildGitPackageReference(args.repoUrl, version),
       source: "repo-url",
