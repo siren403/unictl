@@ -7,14 +7,14 @@
   },
   "type": "module",
   "files": [
-    "dist/",
+    "packages/cli/",
     "packages/upm/com.unictl.editor/",
     "docs/standalone/",
     "integrations/"
   ],
   "workspaces": ["packages/cli"],
   "bin": {
-    "unictl": "./dist/unictl.js"
+    "unictl": "./packages/cli/src/cli.ts"
   },
   "scripts": {
     "build": "./scripts/build/build-cli.sh",
