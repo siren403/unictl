@@ -3,8 +3,9 @@
 ## 1. First Install
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --repo-url https://github.com/OWNER/REPO --dry-run
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --repo-url https://github.com/OWNER/REPO
+# repo URL 자동, CLI 버전 태그로 UPM 고정
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT
 bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
 ```
 

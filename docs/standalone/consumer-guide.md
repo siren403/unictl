@@ -126,14 +126,15 @@ CLI 제품 표면에는 아래 보조 명령도 포함된다.
 ```bash
 bunx github:OWNER/REPO#vX.Y.Z version
 bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --repo-url https://github.com/OWNER/REPO --dry-run
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
 ```
 
 원칙:
 
 - `version`은 CLI와 embedded core package 버전 메타데이터를 보여준다.
 - `doctor`는 설치, manifest, endpoint, editor reachability를 점검한다.
-- `init`은 먼저 `--dry-run`으로 계획을 확인한 뒤 실제 쓰기를 수행하는 흐름을 권장한다.
+- `init`은 먼저 `--dryRun`으로 계획을 확인한 뒤 실제 쓰기를 수행하는 흐름을 권장한다.
+- `init`은 `--repoUrl` 없이도 동작한다 — CLI 내장 repository 정보를 자동 사용한다.
 
 ## 5. 소비자 프로젝트가 확장하는 방법
 
@@ -181,22 +182,24 @@ bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
 - 같은 명령을 두 번 실행해도 결과가 망가지면 안 된다.
 - custom ref를 덮어써야 할 때만 `--force`가 필요하다.
 
-현재 embedded prototype 메모:
-
-- 현재 Queenzle 안의 프로토타입 CLI에서는 `--repo-url` 또는 `--package-ref`를 주는 경로를 권장한다.
-- 이 워크스페이스 안에서만 검증할 때는 local prototype package reference로 fallback 할 수 있다.
-
 예시:
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --repo-url https://github.com/OWNER/REPO --dry-run
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --package-ref file:/ABS/PATH/TO/packages/upm/com.unictl.editor --dry-run
+# 기본: CLI 버전 태그로 UPM 고정 (repo URL 자동)
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
+
+# HEAD 모드: 태그 없이 최신 커밋 참조
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --head --dryRun
+
+# 로컬 개발용: 직접 package ref 지정
+bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --packageRef file:/ABS/PATH/TO/packages/upm/com.unictl.editor --dryRun
 ```
 
 ## 8. 플랫폼 메모
 
-- macOS `0.1.x`는 Unix socket 기반 연결을 사용한다.
-- Windows `0.1.x`는 loopback TCP + `X-Unictl-Token` 기반 연결을 사용한다.
+- macOS `0.1.x`는 Unix socket + HTTP 기반 연결을 사용한다.
+- Windows `0.1.x`는 Named Pipe + 라인 기반 JSON 프로토콜을 사용한다.
+- pipe 이름은 프로젝트 경로의 SHA256 해시로 결정적 생성된다 (`\\.\pipe\unictl_{hash}`).
 - Linux Editor 지원은 `0.1.x` 범위가 아니다.
 
 ## 9. 에이전트 통합 패키지
