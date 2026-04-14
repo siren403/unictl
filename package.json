@@ -17,12 +17,8 @@
     "unictl": "./packages/cli/src/cli.ts"
   },
   "scripts": {
-    "build": "./scripts/build/build-cli.sh",
-    "build:cli": "./scripts/build/build-cli.sh",
+    "release": "bun run ./scripts/release.ts",
     "build:native:macos": "./scripts/build/build-native-macos.sh",
-    "version:fanout": "bun run ./scripts/version/fanout.ts",
-    "version:check": "bun run ./scripts/version/drift-check.ts",
-    "release:assemble": "bun run ./scripts/release/assemble.ts",
-    "release:prepare": "bun run build && bun run version:fanout && bun run version:check && bun run release:assemble"
+    "build:native:windows": "powershell -File ./scripts/build/build-native-windows.ps1"
   }
 }
