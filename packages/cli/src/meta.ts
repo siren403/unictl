@@ -41,6 +41,13 @@ export function getCliPackageMeta(): PackageMeta & { packageJsonPath: string } {
   };
 }
 
+export function getRepoUrl(): string | null {
+  const pkg = readJsonFile<{ repository?: { url?: string } | string }>(rootPackageJsonPath);
+  if (!pkg.repository) return null;
+  if (typeof pkg.repository === "string") return pkg.repository;
+  return pkg.repository.url ?? null;
+}
+
 export function getEmbeddedEditorPackagePath(): string {
   return embeddedEditorPackagePath;
 }

@@ -3,7 +3,7 @@ import { defineCommand, runMain } from "citty";
 import { readFileSync } from "fs";
 import { command, health } from "./client";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
-import { getCliPackageMeta, getEmbeddedEditorPackageVersion } from "./meta";
+import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
   buildGitPackageReference,
   getManifestPath,
@@ -258,16 +258,21 @@ function resolveInitReference(args: {
   repoUrl?: string;
   packageRef?: string;
   version?: string;
+  head?: boolean;
 }): { reference: string; source: string } {
   if (args.packageRef) {
     return { reference: args.packageRef, source: "explicit-package-ref" };
   }
 
-  if (args.repoUrl) {
-    const version = args.version; // undefined → HEAD (no tag pinning)
+  // Resolve repo URL: explicit --repo-url > package.json repository
+  const repoUrl = args.repoUrl ?? getRepoUrl();
+
+  if (repoUrl) {
+    // --head → no tag (HEAD), default → pin to CLI version tag
+    const version = args.head ? undefined : (args.version ?? getCliPackageMeta().version);
     return {
-      reference: buildGitPackageReference(args.repoUrl, version),
-      source: "repo-url",
+      reference: buildGitPackageReference(repoUrl, version),
+      source: args.repoUrl ? "repo-url" : "package-json-repository",
     };
   }
 
@@ -284,6 +289,7 @@ function runInit(args: {
   repoUrl?: string;
   packageRef?: string;
   version?: string;
+  head?: boolean;
   dryRun?: boolean;
   force?: boolean;
 }): Record<string, unknown> {
@@ -546,7 +552,12 @@ const initCmd = defineCommand({
     },
     version: {
       type: "string",
-      description: "Package version tag used with --repo-url (defaults to CLI version)",
+      description: "Package version tag (defaults to CLI version, ignored with --head)",
+    },
+    head: {
+      type: "boolean",
+      default: false,
+      description: "Use HEAD (no tag pinning) — matches bunx github:repo behavior",
     },
     dryRun: {
       type: "boolean",
@@ -566,6 +577,7 @@ const initCmd = defineCommand({
         repoUrl: args.repoUrl,
         packageRef: args.packageRef,
         version: args.version,
+        head: args.head,
         dryRun: args.dryRun,
         force: args.force,
       });
