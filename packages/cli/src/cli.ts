@@ -456,7 +456,7 @@ const editorRestartCmd = defineCommand({
 });
 
 const editorCmd = defineCommand({
-  meta: { name: "editor", version: "0.1.0", description: "Unity editor process control" },
+  meta: { name: "editor", version: getCliPackageMeta().version, description: "Unity editor process control" },
   subCommands: {
     status: editorStatusCmd,
     quit: editorQuitCmd,
@@ -596,7 +596,7 @@ const initCmd = defineCommand({
 const main = defineCommand({
   meta: {
     name: "unictl",
-    version: "0.1.0",
+    version: getCliPackageMeta().version,
     description: "Unity editor control CLI",
   },
   args: {
