@@ -1,6 +1,6 @@
 {
   "name": "unictl",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "repository": {
     "type": "git",
     "url": "https://github.com/siren403/unictl.git"
@@ -12,7 +12,9 @@
     "docs/standalone/",
     "integrations/"
   ],
-  "workspaces": ["packages/cli"],
+  "workspaces": [
+    "packages/cli"
+  ],
   "bin": {
     "unictl": "./packages/cli/src/cli.ts"
   },
