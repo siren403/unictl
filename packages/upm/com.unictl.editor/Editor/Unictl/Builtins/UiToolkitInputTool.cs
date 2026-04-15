@@ -296,7 +296,7 @@ public static class UiToolkitInputTool
 
     private static (bool success, UIDocument document, ErrorResponse error) GetDocument(string documentName)
     {
-        var documents = Object.FindObjectsByType<UIDocument>();
+        var documents = Object.FindObjectsByType<UIDocument>(FindObjectsSortMode.None);
         if (documents == null || documents.Length == 0)
             return (false, null, new ErrorResponse("No active UIDocument found."));
 

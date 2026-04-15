@@ -586,7 +586,7 @@ const initCmd = defineCommand({
 });
 
 // ---------------------------------------------------------------------------
-// main command (legacy passthrough)
+// main command
 // ---------------------------------------------------------------------------
 
 const main = defineCommand({
@@ -595,57 +595,14 @@ const main = defineCommand({
     version: getCliPackageMeta().version,
     description: "Unity editor control CLI",
   },
-  args: {
-    command: {
-      type: "positional",
-      description: "Command to execute (e.g., list, health, ping, editor)",
-      required: true,
-    },
-    project: {
-      type: "string",
-      description: "Unity project path (auto-detected if omitted)",
-    },
-  },
-  run: async ({ args, rawArgs }) => {
-    const cmd = args.command;
-    const project = args.project;
-
-    try {
-      if (cmd === "health") {
-        output(await health({ project }));
-        return;
-      }
-
-      const params = await resolveParams(rawArgs);
-      const result = await command(cmd, params, { project });
-      output(result);
-    } catch (e: any) {
-      output({ error: e.message });
-      process.exit(1);
-    }
+  subCommands: {
+    command: commandCmd,
+    doctor: doctorCmd,
+    editor: editorCmd,
+    health: healthCmd,
+    init: initCmd,
+    version: versionCmd,
   },
 });
 
-// ---------------------------------------------------------------------------
-// Dispatch: route "editor" subcommand manually before citty sees rawArgs
-// ---------------------------------------------------------------------------
-
-const rawArgs = normalizeKnownFlags(process.argv.slice(2));
-// Find first non-flag arg
-const firstArg = rawArgs.find((a) => !a.startsWith("-"));
-
-if (firstArg === "editor") {
-  runMain(editorCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("editor") + 1) });
-} else if (firstArg === "command") {
-  runMain(commandCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("command") + 1) });
-} else if (firstArg === "health") {
-  runMain(healthCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("health") + 1) });
-} else if (firstArg === "version") {
-  runMain(versionCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("version") + 1) });
-} else if (firstArg === "doctor") {
-  runMain(doctorCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("doctor") + 1) });
-} else if (firstArg === "init") {
-  runMain(initCmd, { rawArgs: rawArgs.slice(rawArgs.indexOf("init") + 1) });
-} else {
-  runMain(main);
-}
+runMain(main, { rawArgs: normalizeKnownFlags(process.argv.slice(2)) });
