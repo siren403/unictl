@@ -48,7 +48,7 @@ namespace Unictl.Tools
         private static object DoInspect(ToolParams p)
         {
             var maxElements = p.GetInt("max_elements", 200).Value;
-            var canvases = Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None)
+            var canvases = Object.FindObjectsByType<Canvas>()
                 .Where(c => c.isRootCanvas)
                 .ToArray();
 
@@ -126,7 +126,7 @@ namespace Unictl.Tools
             if (name == null && type == null && text == null)
                 return new ErrorResponse("Provide at least one filter: name, type, or text");
 
-            var selectables = Object.FindObjectsByType<Selectable>(FindObjectsSortMode.None)
+            var selectables = Object.FindObjectsByType<Selectable>()
                 .Where(s => s.gameObject.activeInHierarchy);
 
             if (name != null)
@@ -288,12 +288,31 @@ namespace Unictl.Tools
 
         private static object DoScroll(ToolParams p)
         {
-            var (found, selectable, error) = ResolveTarget(p);
-            if (!found) return error;
+            var path = p.Get("path");
+            var name = p.Get("name");
+            var contains = p.GetBool("contains");
+            var matchIndex = p.GetInt("match_index", 0).Value;
 
-            var scrollRect = selectable.GetComponent<ScrollRect>();
+            ScrollRect scrollRect = null;
+
+            if (path != null)
+            {
+                var go = GameObject.Find(path);
+                if (go == null)
+                    return new ErrorResponse($"GameObject not found at path: {path}");
+                scrollRect = go.GetComponent<ScrollRect>();
+            }
+            else if (name != null)
+            {
+                var all = Object.FindObjectsByType<ScrollRect>()
+                    .Where(s => s.gameObject.activeInHierarchy && MatchString(s.gameObject.name, name, contains))
+                    .ToArray();
+                if (matchIndex < all.Length)
+                    scrollRect = all[matchIndex];
+            }
+
             if (scrollRect == null)
-                return new ErrorResponse($"'{selectable.gameObject.name}' is not a ScrollRect.");
+                return new ErrorResponse("No matching ScrollRect found.");
 
             var x = p.GetFloat("x");
             var y = p.GetFloat("y");
@@ -301,7 +320,7 @@ namespace Unictl.Tools
             if (x != null) scrollRect.horizontalNormalizedPosition = Mathf.Clamp01(x.Value);
             if (y != null) scrollRect.verticalNormalizedPosition = Mathf.Clamp01(y.Value);
 
-            return new SuccessResponse($"Scrolled '{selectable.gameObject.name}'", new
+            return new SuccessResponse($"Scrolled '{scrollRect.gameObject.name}'", new
             {
                 horizontal = scrollRect.horizontalNormalizedPosition,
                 vertical = scrollRect.verticalNormalizedPosition
@@ -332,7 +351,7 @@ namespace Unictl.Tools
             if (name == null && text == null)
                 return (false, null, new ErrorResponse("Provide 'path', 'name', or 'text' to identify the target element."));
 
-            var candidates = Object.FindObjectsByType<Selectable>(FindObjectsSortMode.None)
+            var candidates = Object.FindObjectsByType<Selectable>()
                 .Where(s => s.gameObject.activeInHierarchy);
 
             if (name != null)
@@ -362,7 +381,6 @@ namespace Unictl.Tools
             if (s is Slider) return "Slider";
             if (s is Dropdown) return "Dropdown";
             if (s is InputField) return "InputField";
-            if (s is ScrollRect) return "ScrollRect";
             if (s is Scrollbar) return "Scrollbar";
 
             var typeName = s.GetType().Name;
@@ -405,7 +423,9 @@ namespace Unictl.Tools
             }
             else if (s is InputField inputField)
                 info["input_text"] = inputField.text;
-            else if (s is ScrollRect scroll)
+
+            var scroll = s.GetComponent<ScrollRect>();
+            if (scroll != null)
             {
                 info["horizontal"] = scroll.horizontalNormalizedPosition;
                 info["vertical"] = scroll.verticalNormalizedPosition;
