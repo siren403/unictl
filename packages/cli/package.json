@@ -1,6 +1,6 @@
 {
   "name": "unictl",
-  "version": "0.1.6",
+  "version": "0.1.7",
   "description": "Unity Editor control CLI via Named Pipe (Windows) / Unix Socket (macOS) IPC",
   "type": "module",
   "bin": {
