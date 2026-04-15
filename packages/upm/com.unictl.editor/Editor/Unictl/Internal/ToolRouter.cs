@@ -16,7 +16,16 @@ namespace Unictl
         public static string Execute(string command, JObject parameters)
         {
             if (command == "list")
-                return JsonConvert.SerializeObject(GetToolSchemas());
+                return JsonConvert.SerializeObject(new
+                {
+                    tools = GetToolSchemas(),
+                    extensibility = new
+                    {
+                        hint = "Add custom tools by creating a static C# class with [UnictlTool] attribute and a static HandleCommand(JObject) method.",
+                        example_path = "Editor/Unictl/Builtins/PingTool.cs",
+                        attribute = "[UnictlTool(Name = \"my_tool\", Description = \"...\")]"
+                    }
+                });
 
             var handler = FindHandler(command);
             if (handler == null)

@@ -471,7 +471,7 @@ const editorCmd = defineCommand({
 const commandCmd = defineCommand({
   meta: {
     name: "command",
-    description: "Invoke a UnictlTool by name. Params: -p key=value | @file.json | stdin JSON",
+    description: "Invoke a UnictlTool by name. Params: -p key=value | @file.json | stdin JSON. Use 'list' to see all tools. Add custom tools with [UnictlTool] attribute in C#.",
   },
   args: {
     tool: {
