@@ -98,13 +98,15 @@ namespace Unictl
                             : StringCaseUtility.ToSnakeCase(type.Name);
 
                         var parameters = GetParameterSchema(type);
+                        var example = BuildExample(name, parameters);
 
                         tools.Add(new
                         {
                             name,
                             description = attr.Description ?? "",
                             group = attr.Group ?? "",
-                            parameters
+                            parameters,
+                            example
                         });
                     }
                 }
@@ -117,6 +119,64 @@ namespace Unictl
             return tools;
         }
 
+        private static string BuildExample(string toolName, List<object> parameters)
+        {
+            if (parameters.Count == 0)
+                return $"unictl command {toolName}";
+
+            var parts = new List<string> { "unictl", "command", toolName };
+            foreach (var p in parameters)
+            {
+                var nameField = p.GetType().GetProperty("name")?.GetValue(p)?.ToString();
+                var enumField = p.GetType().GetProperty("enum")?.GetValue(p) as string[];
+                var requiredField = p.GetType().GetProperty("required")?.GetValue(p);
+                if (nameField == null) continue;
+                if (requiredField is bool req && req)
+                {
+                    var val = enumField != null && enumField.Length > 0 ? enumField[0] : "<value>";
+                    parts.Add($"-p {nameField}={val}");
+                }
+            }
+            return string.Join(" ", parts);
+        }
+
+        private static string[] TryParseEnum(string description)
+        {
+            if (string.IsNullOrEmpty(description)) return null;
+            var match = System.Text.RegularExpressions.Regex.Match(
+                description, @"^[^:]+:\s*(.+)$");
+            if (!match.Success) return null;
+            var values = match.Groups[1].Value
+                .Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+                .Select(v => v.Trim())
+                .Where(v => v.Length > 0 && !v.Contains("(") && !v.Contains(")"))
+                .ToArray();
+            return values.Length >= 2 ? values : null;
+        }
+
+        private static object BuildParamSchema(string name, ToolParameterAttribute attr)
+        {
+            var enumValues = TryParseEnum(attr.Description);
+            if (enumValues != null)
+            {
+                return new
+                {
+                    name,
+                    description = attr.Description ?? "",
+                    required = attr.Required,
+                    @default = attr.DefaultValue,
+                    @enum = enumValues
+                };
+            }
+            return new
+            {
+                name,
+                description = attr.Description ?? "",
+                required = attr.Required,
+                @default = attr.DefaultValue
+            };
+        }
+
         private static List<object> GetParameterSchema(Type toolType)
         {
             var paramsType = toolType.GetNestedType("Parameters");
@@ -127,28 +187,14 @@ namespace Unictl
             {
                 var attr = prop.GetCustomAttribute<ToolParameterAttribute>();
                 if (attr == null) continue;
-
-                schema.Add(new
-                {
-                    name = StringCaseUtility.ToSnakeCase(prop.Name),
-                    description = attr.Description ?? "",
-                    required = attr.Required,
-                    @default = attr.DefaultValue
-                });
+                schema.Add(BuildParamSchema(StringCaseUtility.ToSnakeCase(prop.Name), attr));
             }
 
             foreach (var field in paramsType.GetFields(BindingFlags.Public | BindingFlags.Instance))
             {
                 var attr = field.GetCustomAttribute<ToolParameterAttribute>();
                 if (attr == null) continue;
-
-                schema.Add(new
-                {
-                    name = StringCaseUtility.ToSnakeCase(field.Name),
-                    description = attr.Description ?? "",
-                    required = attr.Required,
-                    @default = attr.DefaultValue
-                });
+                schema.Add(BuildParamSchema(StringCaseUtility.ToSnakeCase(field.Name), attr));
             }
 
             return schema;

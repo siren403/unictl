@@ -476,8 +476,8 @@ const commandCmd = defineCommand({
   args: {
     tool: {
       type: "positional",
-      required: true,
-      description: "UnictlTool name to invoke (e.g. editor_control, capture_ui)",
+      required: false,
+      description: "UnictlTool name to invoke (e.g. editor_control, capture_ui). Omit to list all tools.",
     },
     p: {
       type: "string",
@@ -490,8 +490,9 @@ const commandCmd = defineCommand({
   },
   run: async ({ args, rawArgs }) => {
     try {
+      const toolName = args.tool ? String(args.tool) : "list";
       const params = await resolveParams(rawArgs);
-      output(await command(String(args.tool), params, { project: args.project }));
+      output(await command(toolName, params, { project: args.project }));
     } catch (error) {
       outputErrorAndExit(error);
     }
@@ -607,7 +608,12 @@ const main = defineCommand({
   meta: {
     name: "unictl",
     version: getCliPackageMeta().version,
-    description: "Unity editor control CLI",
+    description: `Unity editor control CLI
+
+QUICK START (run in order):
+  1. unictl health                          # verify editor connection
+  2. unictl command list                    # discover all tools and actions
+  3. unictl command <TOOL> -p action=<ACT>  # invoke a tool`,
   },
   subCommands: {
     command: commandCmd,
