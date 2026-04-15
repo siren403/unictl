@@ -462,12 +462,19 @@ const editorCmd = defineCommand({
 });
 
 const commandCmd = defineCommand({
-  meta: { name: "command", description: "Invoke a specific UnictlTool by name" },
+  meta: {
+    name: "command",
+    description: "Invoke a UnictlTool by name. Params: -p key=value | @file.json | stdin JSON",
+  },
   args: {
     tool: {
       type: "positional",
       required: true,
-      description: "UnictlTool name to invoke",
+      description: "UnictlTool name to invoke (e.g. editor_control, capture_ui)",
+    },
+    p: {
+      type: "string",
+      description: "Parameter as key=value (repeatable, e.g. -p action=play -p speed=2)",
     },
     project: {
       type: "string",
