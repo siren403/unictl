@@ -364,6 +364,8 @@ function normalizeKnownFlags(args: string[]): string[] {
         return "--repoUrl";
       case "--package-ref":
         return "--packageRef";
+      case "--skip-precompile":
+        return "--skipPrecompile";
       default:
         return arg;
     }
@@ -416,16 +418,21 @@ const editorQuitCmd = defineCommand({
 });
 
 const editorOpenCmd = defineCommand({
-  meta: { name: "open", description: "Open the Unity editor" },
+  meta: { name: "open", description: "Open the Unity editor (runs pre-compile check first)" },
   args: {
     project: {
       type: "string",
       description: "Unity project path (auto-detected if omitted)",
     },
+    skipPrecompile: {
+      type: "boolean",
+      default: false,
+      description: "Skip the batch-mode pre-compile check",
+    },
   },
   run: async ({ args }) => {
     try {
-      output(await editorOpen({ project: args.project }));
+      output(await editorOpen({ project: args.project, skipPrecompile: args.skipPrecompile }));
     } catch (e: any) {
       output({ error: e.message });
       process.exit(1);

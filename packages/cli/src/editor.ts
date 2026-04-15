@@ -187,6 +187,42 @@ function cleanBackupScenes(projectRoot: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// pre-compile check
+// ---------------------------------------------------------------------------
+
+async function precompileCheck(
+  unityBin: string,
+  projectRoot: string
+): Promise<{ success: boolean; errors: string[] }> {
+  const logFile = join(projectRoot, "Temp", "unictl-precompile.log");
+
+  const proc = Bun.spawn(
+    [unityBin, "-batchmode", "-quit", "-projectPath", projectRoot, "-logFile", logFile],
+    { stdio: ["ignore", "ignore", "ignore"] }
+  );
+  await proc.exited;
+  const exitCode = proc.exitCode;
+
+  if (exitCode === 0) {
+    return { success: true, errors: [] };
+  }
+
+  let errors: string[] = [];
+  if (existsSync(logFile)) {
+    const log = readFileSync(logFile, "utf-8");
+    errors = log
+      .split("\n")
+      .filter((line) => /error\s+CS\d{4}/i.test(line))
+      .slice(0, 20);
+  }
+
+  return {
+    success: false,
+    errors: errors.length > 0 ? errors : [`Unity exited with code ${exitCode}. Check ${logFile}`],
+  };
+}
+
+// ---------------------------------------------------------------------------
 // editor status
 // ---------------------------------------------------------------------------
 
@@ -257,7 +293,10 @@ export async function editorQuit(opts?: {
 // editor open
 // ---------------------------------------------------------------------------
 
-export async function editorOpen(opts?: { project?: string }): Promise<unknown> {
+export async function editorOpen(opts?: {
+  project?: string;
+  skipPrecompile?: boolean;
+}): Promise<unknown> {
   const projectRoot = getProjectRoot(opts?.project);
 
   // Refuse if already running
@@ -277,23 +316,38 @@ export async function editorOpen(opts?: { project?: string }): Promise<unknown> 
     throw new Error(`Unity binary not found: ${unityBin}`);
   }
 
-  // Launch Unity (detached, background)
+  // Pre-compile check: run Unity in batch mode to detect compile errors
+  if (!opts?.skipPrecompile) {
+    const precompileResult = await precompileCheck(unityBin, projectRoot);
+    if (!precompileResult.success) {
+      throw new Error(
+        `Pre-compile check failed. Fix errors before opening:\n${precompileResult.errors.join("\n")}`
+      );
+    }
+  }
+
+  // Launch Unity (fully detached so interrupt won't kill it)
   const proc = Bun.spawn([unityBin, "-projectPath", projectRoot], {
     detached: true,
     stdio: ["ignore", "ignore", "ignore"],
   });
   const launchedPid = proc.pid;
+  proc.unref();
 
-  // Poll /health until responsive (500ms interval, 120s timeout)
+  // Poll /health until responsive (2s interval, 120s timeout)
   const timeout = Date.now() + 120_000;
   while (Date.now() < timeout) {
-    await sleep(500);
-    const endpoint = readEndpointDescriptor(opts?.project) ?? resolveEndpointDescriptor(opts?.project);
-    if (endpointIsReachable(endpoint)) {
-      const healthData = await tryHealth(endpoint);
-      if (healthData !== null) {
-        return { opened: true, pid: launchedPid };
+    await sleep(2_000);
+    try {
+      const endpoint = readEndpointDescriptor(opts?.project) ?? resolveEndpointDescriptor(opts?.project);
+      if (endpointIsReachable(endpoint)) {
+        const healthData = await tryHealth(endpoint);
+        if (healthData !== null) {
+          return { opened: true, pid: launchedPid };
+        }
       }
+    } catch {
+      // pipe not ready yet, continue polling
     }
   }
 

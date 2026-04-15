@@ -49,14 +49,14 @@ namespace Unictl.Tools
             if (!File.Exists(logPath))
                 return new ErrorResponse($"Editor log not found: {logPath}");
 
-            var allLines = File.ReadAllLines(logPath);
-            var start = Math.Max(0, allLines.Length - lines);
+            var allLines = ReadLinesShared(logPath);
+            var start = Math.Max(0, allLines.Count - lines);
             var result = allLines.Skip(start).ToArray();
 
             return new SuccessResponse("Editor log tail", new
             {
                 log_path = logPath,
-                total_lines = allLines.Length,
+                total_lines = allLines.Count,
                 returned_lines = result.Length,
                 lines = result
             });
@@ -73,7 +73,7 @@ namespace Unictl.Tools
             if (!File.Exists(logPath))
                 return new ErrorResponse($"Editor log not found: {logPath}");
 
-            var matches = File.ReadLines(logPath)
+            var matches = ReadLinesShared(logPath)
                 .Select((line, index) => new { line, index })
                 .Where(x => x.line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
                 .TakeLast(lines)
@@ -139,6 +139,17 @@ namespace Unictl.Tools
                 if (RuntimeLogs.Count > MaxRuntimeLogs)
                     RuntimeLogs.RemoveAt(0);
             }
+        }
+
+        private static List<string> ReadLinesShared(string path)
+        {
+            using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
+            using var reader = new StreamReader(stream);
+            var lines = new List<string>();
+            string line;
+            while ((line = reader.ReadLine()) != null)
+                lines.Add(line);
+            return lines;
         }
 
         private static string GetEditorLogPath()

@@ -213,7 +213,7 @@ async function fetchViaPipe(
     const timeout = setTimeout(() => {
       sock.destroy();
       reject(new Error(`Pipe connection timeout: ${pipeName}`));
-    }, 10_000);
+    }, 2_000);
 
     sock.on("connect", () => {
       sock.write(request + "\n");
