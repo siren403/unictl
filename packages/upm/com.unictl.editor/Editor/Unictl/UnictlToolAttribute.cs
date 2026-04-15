@@ -77,15 +77,22 @@ namespace Unictl
         {
             var token = _params[key];
             if (token == null) return defaultValue;
-            return token.Type == JTokenType.Integer ? token.Value<int>() : defaultValue;
+            if (token.Type == JTokenType.Integer) return token.Value<int>();
+            if (token.Type == JTokenType.String && int.TryParse(token.ToString(), out var parsed))
+                return parsed;
+            return defaultValue;
         }
 
         public float? GetFloat(string key, float? defaultValue = null)
         {
             var token = _params[key];
             if (token == null) return defaultValue;
-            return token.Type == JTokenType.Float || token.Type == JTokenType.Integer
-                ? token.Value<float>() : defaultValue;
+            if (token.Type == JTokenType.Float || token.Type == JTokenType.Integer)
+                return token.Value<float>();
+            if (token.Type == JTokenType.String && float.TryParse(token.ToString(),
+                System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var parsed))
+                return parsed;
+            return defaultValue;
         }
 
         public bool GetBool(string key, bool defaultValue = false)
