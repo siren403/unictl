@@ -48,7 +48,7 @@ namespace Unictl.Tools
         private static object DoInspect(ToolParams p)
         {
             var maxElements = p.GetInt("max_elements", 200).Value;
-            var canvases = Object.FindObjectsByType<Canvas>()
+            var canvases = Object.FindObjectsByType<Canvas>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
                 .Where(c => c.isRootCanvas)
                 .ToArray();
 
@@ -126,7 +126,7 @@ namespace Unictl.Tools
             if (name == null && type == null && text == null)
                 return new ErrorResponse("Provide at least one filter: name, type, or text");
 
-            var selectables = Object.FindObjectsByType<Selectable>()
+            var selectables = Object.FindObjectsByType<Selectable>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
                 .Where(s => s.gameObject.activeInHierarchy);
 
             if (name != null)
@@ -304,7 +304,7 @@ namespace Unictl.Tools
             }
             else if (name != null)
             {
-                var all = Object.FindObjectsByType<ScrollRect>()
+                var all = Object.FindObjectsByType<ScrollRect>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
                     .Where(s => s.gameObject.activeInHierarchy && MatchString(s.gameObject.name, name, contains))
                     .ToArray();
                 if (matchIndex < all.Length)
@@ -351,7 +351,7 @@ namespace Unictl.Tools
             if (name == null && text == null)
                 return (false, null, new ErrorResponse("Provide 'path', 'name', or 'text' to identify the target element."));
 
-            var candidates = Object.FindObjectsByType<Selectable>()
+            var candidates = Object.FindObjectsByType<Selectable>(FindObjectsInactive.Exclude, FindObjectsSortMode.None)
                 .Where(s => s.gameObject.activeInHierarchy);
 
             if (name != null)
