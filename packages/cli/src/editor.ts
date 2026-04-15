@@ -143,10 +143,7 @@ async function getUnityPid(projectPath?: string): Promise<number | null> {
   });
 
   const preferred = matchingProject.find((proc) => !isBatchModeWorker(proc.command));
-  if (preferred) return preferred.pid;
-
-  const fallback = processes.find((proc) => !isBatchModeWorker(proc.command));
-  return fallback?.pid ?? null;
+  return preferred?.pid ?? null;
 }
 
 function endpointIsReachable(endpoint: EndpointDescriptor): boolean {
