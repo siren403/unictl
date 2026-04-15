@@ -1,6 +1,6 @@
 {
   "name": "com.unictl.editor",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "displayName": "Unictl Editor",
   "description": "Unity-side editor package for unictl. Provides the editor server, stable built-in tools, and native transport plugins consumed by the CLI.",
   "unity": "6000.0",
