@@ -7,7 +7,6 @@ import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "
 import {
   buildGitPackageReference,
   getManifestPath,
-  getPrototypeLocalPackageReference,
   parsePackageReference,
   readProjectManifest,
   writeProjectManifest,
@@ -276,12 +275,9 @@ function resolveInitReference(args: {
     };
   }
 
-  const prototypeRef = getPrototypeLocalPackageReference();
-  if (prototypeRef) {
-    return { reference: prototypeRef, source: "embedded-prototype" };
-  }
-
-  throw new Error("Missing package reference. Provide `--repo-url` or `--package-ref`.");
+  throw new Error(
+    "Could not resolve package reference. The CLI package is missing a `repository` field; pass --repoUrl or --packageRef explicitly."
+  );
 }
 
 function runInit(args: {

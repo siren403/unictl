@@ -1,11 +1,27 @@
 {
-  "name": "@unictl/cli",
+  "name": "unictl",
   "version": "0.1.2",
-  "private": true,
+  "description": "Unity Editor control CLI via Named Pipe (Windows) / Unix Socket (macOS) IPC",
   "type": "module",
   "bin": {
-    "unictl": "./src/cli.ts"
+    "unictl": "./bin.js"
   },
+  "files": [
+    "src/",
+    "bin.js"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/siren403/unictl.git"
+  },
+  "license": "MIT",
+  "keywords": [
+    "unity",
+    "unity-editor",
+    "cli",
+    "ipc",
+    "named-pipe"
+  ],
   "dependencies": {
     "citty": "^0.2.1"
   }

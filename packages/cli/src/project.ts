@@ -1,6 +1,5 @@
 import { existsSync, readFileSync, writeFileSync } from "fs";
 import { join, resolve } from "path";
-import { getEmbeddedEditorPackagePath } from "./meta";
 import { getProjectPaths } from "./socket";
 
 export type UnityManifest = {
@@ -42,11 +41,6 @@ export function buildGitPackageReference(repoUrl: string, version?: string): str
   return `${normalizedRepoUrl}?path=/packages/upm/com.unictl.editor${fragment}`;
 }
 
-export function getPrototypeLocalPackageReference(): string | null {
-  const packagePath = getEmbeddedEditorPackagePath();
-  if (!existsSync(join(packagePath, "package.json"))) return null;
-  return `file:${packagePath}`;
-}
 
 function tryReadPackageVersion(packagePath: string): string | null {
   const packageJsonPath = join(packagePath, "package.json");

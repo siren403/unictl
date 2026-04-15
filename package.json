@@ -1,23 +1,11 @@
 {
-  "name": "unictl",
+  "name": "unictl-repo",
   "version": "0.1.2",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/siren403/unictl.git"
-  },
+  "private": true,
   "type": "module",
-  "files": [
-    "packages/cli/",
-    "packages/upm/com.unictl.editor/",
-    "docs/standalone/",
-    "integrations/"
-  ],
   "workspaces": [
     "packages/cli"
   ],
-  "bin": {
-    "unictl": "./packages/cli/src/cli.ts"
-  },
   "scripts": {
     "release": "bun run ./scripts/release.ts",
     "build:native:macos": "./scripts/build/build-native-macos.sh",
