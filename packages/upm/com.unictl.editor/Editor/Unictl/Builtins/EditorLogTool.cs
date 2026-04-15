@@ -2,16 +2,20 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
 
 namespace Unictl.Tools
 {
-    [UnictlTool(Name = "editor_log", Description = "Read Unity editor logs: tail, search, or get recent runtime logs")]
+    [UnictlTool(Name = "editor_log", Description = "Read Unity editor logs. IMPORTANT: compile errors (CSxxxx) only appear in tail/search/errors (file-based), NOT in game_logs (memory-based Debug.Log buffer).")]
     public static class EditorLogTool
     {
-        private static readonly List<LogEntry> RuntimeLogs = new List<LogEntry>();
-        private const int MaxRuntimeLogs = 500;
+        private static readonly List<LogEntry> GameLogs = new List<LogEntry>();
+        private const int MaxGameLogs = 500;
+
+        private static readonly Regex CompileErrorRegex = new Regex(@"\berror\s+CS\d{4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+        private static readonly Regex ExceptionRegex = new Regex(@"^\S*Exception:", RegexOptions.Compiled);
 
         static EditorLogTool()
         {
@@ -20,7 +24,7 @@ namespace Unictl.Tools
 
         public class Parameters
         {
-            [ToolParameter("Action: tail, search, runtime, clear", Required = true)]
+            [ToolParameter("Action: tail, search, errors, game_logs, clear_game_logs. Use 'errors' to check compile/exception failures.", Required = true)]
             public string Action { get; set; }
         }
 
@@ -34,8 +38,9 @@ namespace Unictl.Tools
             {
                 case "tail": return DoTail(p);
                 case "search": return DoSearch(p);
-                case "runtime": return DoRuntime(p);
-                case "clear": return DoClear();
+                case "errors": return DoErrors(p);
+                case "game_logs": return DoGameLogs(p);
+                case "clear_game_logs": return DoClearGameLogs();
                 default:
                     return new ErrorResponse($"Unknown action: {action}");
             }
@@ -53,8 +58,10 @@ namespace Unictl.Tools
             var start = Math.Max(0, allLines.Count - lines);
             var result = allLines.Skip(start).ToArray();
 
-            return new SuccessResponse("Editor log tail", new
+            return new SuccessResponse("Editor log tail (file-based, includes compile errors)", new
             {
+                source = "Editor.log file",
+                includes_compile_errors = true,
                 log_path = logPath,
                 total_lines = allLines.Count,
                 returned_lines = result.Length,
@@ -80,47 +87,89 @@ namespace Unictl.Tools
                 .Select(x => new { line_number = x.index + 1, text = x.line })
                 .ToArray();
 
-            return new SuccessResponse($"Found {matches.Length} matches for '{pattern}'", new
+            return new SuccessResponse($"Found {matches.Length} matches for '{pattern}' (file-based)", new
             {
+                source = "Editor.log file",
+                includes_compile_errors = true,
                 log_path = logPath,
                 pattern,
                 matches
             });
         }
 
-        private static object DoRuntime(ToolParams p)
+        private static object DoErrors(ToolParams p)
+        {
+            var lines = p.GetInt("lines", 100).Value;
+            var logPath = GetEditorLogPath();
+
+            if (!File.Exists(logPath))
+                return new ErrorResponse($"Editor log not found: {logPath}");
+
+            var allLines = ReadLinesShared(logPath);
+            var compileErrors = new List<object>();
+            var exceptions = new List<object>();
+
+            for (int i = 0; i < allLines.Count; i++)
+            {
+                var line = allLines[i];
+                if (CompileErrorRegex.IsMatch(line))
+                    compileErrors.Add(new { line_number = i + 1, text = line });
+                else if (ExceptionRegex.IsMatch(line))
+                    exceptions.Add(new { line_number = i + 1, text = line });
+            }
+
+            var compileTrimmed = compileErrors.TakeLast(lines).ToArray();
+            var exceptionsTrimmed = exceptions.TakeLast(lines).ToArray();
+            var total = compileTrimmed.Length + exceptionsTrimmed.Length;
+
+            return new SuccessResponse(
+                total == 0 ? "No compile errors or exceptions found" : $"Found {compileTrimmed.Length} compile errors, {exceptionsTrimmed.Length} exceptions",
+                new
+                {
+                    source = "Editor.log file (filtered)",
+                    log_path = logPath,
+                    compile_errors = compileTrimmed,
+                    exceptions = exceptionsTrimmed,
+                    total_count = total
+                });
+        }
+
+        private static object DoGameLogs(ToolParams p)
         {
             var count = p.GetInt("lines", 50).Value;
             var level = p.Get("level");
 
             List<LogEntry> filtered;
-            lock (RuntimeLogs)
+            lock (GameLogs)
             {
                 filtered = level != null
-                    ? RuntimeLogs.Where(e => string.Equals(e.level, level, StringComparison.OrdinalIgnoreCase)).ToList()
-                    : new List<LogEntry>(RuntimeLogs);
+                    ? GameLogs.Where(e => string.Equals(e.level, level, StringComparison.OrdinalIgnoreCase)).ToList()
+                    : new List<LogEntry>(GameLogs);
             }
 
             var result = filtered.TakeLast(count).ToArray();
 
-            return new SuccessResponse($"Runtime logs ({result.Length} entries)", new
+            return new SuccessResponse($"Game logs ({result.Length} entries from Debug.Log buffer — does NOT include compile errors)", new
             {
-                total_captured = RuntimeLogs.Count,
+                source = "Application.logMessageReceived buffer (Debug.Log/LogWarning/LogError only)",
+                includes_compile_errors = false,
+                hint = "To check compile errors, use action=errors or action=tail/search.",
+                total_captured = GameLogs.Count,
                 returned = result.Length,
                 filter_level = level,
                 entries = result
             });
         }
 
-        private static object DoClear()
+        private static object DoClearGameLogs()
         {
             int count;
-            lock (RuntimeLogs)
+            lock (GameLogs)
             {
-                count = RuntimeLogs.Count;
-                RuntimeLogs.Clear();
+                count = GameLogs.Count;
+                GameLogs.Clear();
             }
-            return new SuccessResponse($"Cleared {count} runtime log entries");
+            return new SuccessResponse($"Cleared {count} game log entries");
         }
 
         private static void OnLogMessage(string condition, string stackTrace, LogType type)
@@ -133,11 +182,11 @@ namespace Unictl.Tools
                 stack_trace = type == LogType.Exception || type == LogType.Error ? stackTrace : null
             };
 
-            lock (RuntimeLogs)
+            lock (GameLogs)
             {
-                RuntimeLogs.Add(entry);
-                if (RuntimeLogs.Count > MaxRuntimeLogs)
-                    RuntimeLogs.RemoveAt(0);
+                GameLogs.Add(entry);
+                if (GameLogs.Count > MaxGameLogs)
+                    GameLogs.RemoveAt(0);
             }
         }
 
