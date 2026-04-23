@@ -1,6 +1,6 @@
 import { defineCommand } from "citty";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { join } from "path";
+import { join, isAbsolute, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
 import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary } from "./process";
 import { command } from "./client";
@@ -118,6 +118,7 @@ QUICK START:
   unictl build --target StandaloneWindows64 --wait
   unictl build --target Android --build-profile Assets/Profiles/Android-Release.asset --timeout 3600
   unictl build --target iOS --batch --output Build/iOS --job-id ci-abc123
+  unictl build --target StandaloneWindows64 --build-profile Assets/Settings/Profiles/Windows.asset --batch
 
 LANE ROUTING:
   editor running + low hook_risk    → IPC lane (fast path)
@@ -126,11 +127,16 @@ LANE ROUTING:
   multiple editors                  → fail-fast (multi_instance)
   stale UnityLockfile               → preflight error (project_locked)
 
+BUILD PROFILE (Unity 6+ only):
+  --build-profile requires --batch (or editor not running).
+  IPC lane rejects it: profile switch requires a domain reload.
+  Path must be relative to project root and end in .asset.
+
 EXIT CODES:
   0   success
   1   build failed
   2   param/validation error
-  3   lane unavailable (editor_busy / project_locked / multi_instance / editor_running / editor_not_running)
+  3   lane unavailable (editor_busy / project_locked / multi_instance / editor_running / editor_not_running / profile_switch_requires_batch)
   124 --wait client timeout while build continues
   125 unictl internal error`,
   },
@@ -139,7 +145,7 @@ EXIT CODES:
     output: { type: "string", description: "Output path (default: derived from target + ProductName)" },
     scenes: { type: "string", description: "Comma-separated scene paths (default: EditorBuildSettings)" },
     define: { type: "string", description: "Comma-separated define symbols (e.g. DEBUG,API_URL=https://...)" },
-    buildProfile: { type: "string", description: "Unity 6+ BuildProfile asset path" },
+    buildProfile: { type: "string", description: "Unity 6+ BuildProfile asset path (relative to project root, must end in .asset; batchmode only)" },
     development: { type: "boolean", default: false, description: "Development build" },
     allowDebugging: { type: "boolean", default: false, description: "Allow script debugging" },
     wait: { type: "boolean", default: true, description: "Block until terminal state (default: on)" },
@@ -157,6 +163,38 @@ EXIT CODES:
     const jobId = args.jobId ?? crypto.randomUUID().replace(/-/g, "");
     const timeoutSec = parseInt(args.timeout ?? "0", 10) || 0;
 
+    // --build-profile 유효성 검사
+    let resolvedBuildProfile: string | undefined;
+    if (args.buildProfile) {
+      const raw = args.buildProfile as string;
+      if (!raw.endsWith(".asset")) {
+        errorExit(
+          2,
+          "profile_invalid_extension",
+          `--build-profile path must end with .asset: "${raw}"`,
+          "BuildProfile path must end with .asset. Pass an asset path, not a directory or label."
+        );
+      }
+      // 절대 경로 → 프로젝트 루트 기준 상대 경로로 변환
+      let relPath: string;
+      if (isAbsolute(raw)) {
+        relPath = relative(projectRoot, raw).replace(/\\/g, "/");
+      } else {
+        relPath = raw.replace(/\\/g, "/");
+      }
+      // 존재 여부 확인 (프로젝트 루트 기준)
+      const absPath = resolve(projectRoot, relPath);
+      if (!existsSync(absPath)) {
+        errorExit(
+          3,
+          "profile_not_found",
+          `BuildProfile asset not found: "${absPath}" (resolved from "${raw}")`,
+          "BuildProfile asset not found at the given path. Verify path relative to project root."
+        );
+      }
+      resolvedBuildProfile = relPath;
+    }
+
     const buildParams: Record<string, unknown> = {
       job_id: jobId,
       timeout_sec: timeoutSec,
@@ -165,7 +203,7 @@ EXIT CODES:
     if (args.output) buildParams.build_path = args.output;
     if (args.scenes) buildParams.scenes = args.scenes;
     if (args.define) buildParams.define_symbols = args.define;
-    if (args.buildProfile) buildParams.build_profile = args.buildProfile;
+    if (resolvedBuildProfile) buildParams.build_profile = resolvedBuildProfile;
     if (args.development || args.allowDebugging) {
       buildParams.options = {
         development: args.development ?? false,
@@ -244,7 +282,7 @@ EXIT CODES:
         const err = r.data as Record<string, unknown> | undefined;
         const kind = (err?.kind as string) ?? "unknown";
         // lane 불가 에러 → exit 3
-        const laneErrors = new Set(["editor_busy", "project_locked", "multi_instance", "lock_held", "prepare_required", "target_unsupported"]);
+        const laneErrors = new Set(["editor_busy", "project_locked", "multi_instance", "lock_held", "prepare_required", "target_unsupported", "profile_switch_requires_batch"]);
         const code = laneErrors.has(kind) ? 3 : 2;
         process.stderr.write(JSON.stringify(r) + "\n");
         process.exit(code);
@@ -283,14 +321,21 @@ EXIT CODES:
 
     // -quit を削除: BuildFromCli は OneShot 콜백에서 EditorApplication.Exit()를 직접 호출.
     // -quit 가 있으면 executeMethod 반환 즉시 Unity가 종료되어 OneShot 발화 전에 exit됨.
+    const unityArgs = [
+      unityBin,
+      "-batchmode",
+      "-projectPath", projectRoot,
+    ];
+    // -activeBuildProfile must be placed before -executeMethod so Unity applies
+    // the profile during project load, before scripts run (Unity 6+ only).
+    if (resolvedBuildProfile) {
+      unityArgs.push("-activeBuildProfile", resolvedBuildProfile);
+    }
+    unityArgs.push("-executeMethod", "Unictl.Editor.BuildEntry.BuildFromCli");
+    unityArgs.push("-logFile", logPath);
+
     const proc = Bun.spawn(
-      [
-        unityBin,
-        "-batchmode",
-        "-projectPath", projectRoot,
-        "-executeMethod", "Unictl.Editor.BuildEntry.BuildFromCli",
-        "-logFile", logPath,
-      ],
+      unityArgs,
       { env, stdio: ["ignore", "ignore", "ignore"] }
     );
 

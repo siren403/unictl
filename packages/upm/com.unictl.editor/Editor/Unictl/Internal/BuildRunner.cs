@@ -55,6 +55,12 @@ namespace Unictl.Internal
             if (!BuildPipeline.IsBuildTargetSupported(group, target))
                 return BuildError("target_unsupported", $"BuildTarget '{p.Target}' is not supported by this Unity installation.", null);
 
+            // BuildProfile: IPC lane에서는 거부 (domain reload 필요)
+            if (!Application.isBatchMode && !string.IsNullOrEmpty(p.BuildProfile))
+                return BuildError("profile_switch_requires_batch",
+                    "IPC lane cannot cross a domain reload; re-run with --batch (editor off) to apply a BuildProfile.",
+                    null);
+
             // define_symbols 유효성 검사 (§3.2)
             if (p.DefineSymbols != null && p.DefineSymbols.Length > 0)
             {
@@ -209,6 +215,11 @@ namespace Unictl.Internal
                 }
 
                 WriteProgress(jobId, State.Running, p, null, null, null);
+
+                // Batch: -activeBuildProfile was already applied via CLI flag before project load.
+                // Log for observability; do NOT call BuildProfile.SetActiveBuildProfile here.
+                if (Application.isBatchMode && !string.IsNullOrEmpty(p.BuildProfile))
+                    Debug.Log($"[unictl] using active profile: {p.BuildProfile}");
 
                 var opts = BuildBuildPlayerOptions(p);
                 var report = BuildPipeline.BuildPlayer(opts);

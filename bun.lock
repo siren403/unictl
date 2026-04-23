@@ -6,10 +6,10 @@
       "name": "unictl",
     },
     "packages/cli": {
-      "name": "@unictl/cli",
-      "version": "0.1.0",
+      "name": "unictl",
+      "version": "0.1.9",
       "bin": {
-        "unictl": "./src/cli.ts",
+        "unictl": "./bin.js",
       },
       "dependencies": {
         "citty": "^0.2.1",
@@ -17,8 +17,8 @@
     },
   },
   "packages": {
-    "@unictl/cli": ["@unictl/cli@workspace:packages/cli"],
-
     "citty": ["citty@0.2.1", "", {}, "sha512-kEV95lFBhQgtogAPlQfJJ0WGVSokvLr/UEoFPiKKOXF7pl98HfUVUD0ejsuTCld/9xH9vogSywZ5KqHzXrZpqg=="],
+
+    "unictl": ["unictl@workspace:packages/cli"],
   }
 }

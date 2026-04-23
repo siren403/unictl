@@ -23,7 +23,7 @@ namespace Unictl.Builtins
             [ToolParameter("Comma-separated scripting define symbols to add, e.g. DEBUG,API_URL=https://example.com (max 128 entries / 4 KiB)", Required = false)]
             public string DefineSymbols { get; set; }
 
-            [ToolParameter("Unity 6+ BuildProfile asset path, e.g. Assets/Profiles/Android-Release.asset (detection lands in P5)", Required = false)]
+            [ToolParameter("Unity 6+ BuildProfile asset path, e.g. Assets/Profiles/Android-Release.asset (batchmode only; IPC rejects with profile_switch_requires_batch)", Required = false)]
             public string BuildProfile { get; set; }
 
             [ToolParameter("Build options flags object: development (bool), allow_debugging (bool), enable_deep_profiling (bool), enable_code_coverage (bool), connect_profiler (bool)", Required = false)]
@@ -66,7 +66,7 @@ namespace Unictl.Builtins
                             new { name = "build_path", type = "string", required = false, description = "Output path for build artifacts (default: derived from target + ProductName)", example = "Build/Windows" },
                             new { name = "scenes", type = "string", required = false, description = "Comma-separated scene paths (default: EditorBuildSettings)", example = "Assets/Scenes/Main.unity,Assets/Scenes/Game.unity" },
                             new { name = "define_symbols", type = "string", required = false, description = "Comma-separated scripting define symbols (max 128 / 4 KiB)", example = "RELEASE,API_BASE=https://example.com" },
-                            new { name = "build_profile", type = "string", required = false, description = "Unity 6+ BuildProfile asset path (detection lands in P5)", example = "Assets/Profiles/Android-Release.asset" },
+                            new { name = "build_profile", type = "string", required = false, description = "Unity 6+ BuildProfile asset path (batchmode only; IPC rejects with profile_switch_requires_batch)", example = "Assets/Profiles/Android-Release.asset" },
                             new { name = "options", type = "object", required = false, description = "Build options: development, allow_debugging, enable_deep_profiling, enable_code_coverage, connect_profiler (all bool)", example = new { development = true, allow_debugging = false } },
                             new { name = "env", type = "object", required = false, description = "Environment variables to inject (sensitive keys are redacted in progress files)", example = new { BUILD_NUMBER = "42" } },
                             new { name = "timeout_sec", type = "string", required = false, @default = "0", description = "Client-side wait timeout in seconds; 0 = unlimited. Exit code 124 on timeout.", example = "3600" },
