@@ -42,16 +42,24 @@ namespace Unictl.Builtins
                     });
             }
 
-            // Cancellation not yet implemented (lands in P3)
-            return new ErrorResponse(
-                "build_cancel is scaffolded in P1; cooperative cancellation lands in P3.",
-                new
-                {
-                    kind = "not_yet_implemented",
-                    hint = HintTable.Get("not_yet_implemented"),
-                    job_id = jobId,
-                    phase_needed = "P3",
-                });
+            var result = BuildRunner.CancelJob(jobId);
+
+            if (result["ok"]?.ToObject<bool>() == false)
+            {
+                var err = result["error"] as Newtonsoft.Json.Linq.JObject;
+                return new ErrorResponse(
+                    err?["message"]?.ToString() ?? "Cancellation failed.",
+                    new
+                    {
+                        kind = err?["kind"]?.ToString() ?? "unknown",
+                        hint = err?["hint"]?.ToString(),
+                        job_id = jobId,
+                    });
+            }
+
+            return new SuccessResponse(
+                $"Cancel result for job {jobId}",
+                result);
         }
     }
 }

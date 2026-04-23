@@ -19,6 +19,8 @@ namespace Unictl.Internal
             { "build_failed",           "see progress_file report_summary for error details; check Unity log" },
             { "editor_running",         "editor is running; quit it first or omit --batch to use IPC lane" },
             { "editor_not_running",     "editor is not running; open it first with: unictl editor open" },
+            { "cancelled_by_user",      "Job aborted by user via build_cancel. Re-run the build if needed." },
+            { "not_cancellable",        "Job is past queue stage. BuildPipeline.BuildPlayer has no interrupt API; wait for completion." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;

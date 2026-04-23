@@ -88,6 +88,101 @@ namespace Unictl.Internal
             };
         }
 
+        /// <summary>
+        /// 협조적 취소. queued 상태(OneShot 미발화)인 경우에만 실제 취소 가능.
+        /// running 이상은 Unity BuildPipeline interrupt API 없으므로 거부.
+        /// </summary>
+        public static JObject CancelJob(string jobId)
+        {
+            // Case 1: job_id 없거나 빈 값
+            if (string.IsNullOrWhiteSpace(jobId))
+                return BuildError("invalid_param", "job_id is required.", null);
+
+            var buildsDir = GetBuildsDir();
+            var path = Path.Combine(buildsDir, $"{jobId}.json");
+
+            // Case 2: 활성 job이 아님
+            if (_activeJobId != jobId)
+            {
+                if (!File.Exists(path))
+                    return BuildError("invalid_param", $"Job not found: {jobId}", null);
+
+                var current = JObject.Parse(StripBom(File.ReadAllText(path)));
+                var state = current["state"]?.ToString();
+                if (state == "done" || state == "failed" || state == "aborted")
+                {
+                    return new JObject
+                    {
+                        ["ok"] = true,
+                        ["job_id"] = jobId,
+                        ["previous_state"] = state,
+                        ["new_state"] = state,
+                        ["note"] = "already terminal; no-op",
+                    };
+                }
+
+                // 활성 아님 + 비-terminal — orphan: aborted로 전환
+                current["state"] = "aborted";
+                current["error"] = new JObject
+                {
+                    ["kind"] = "cancelled_by_user",
+                    ["message"] = "Cancelled by build_cancel (orphan job)",
+                    ["hint"] = HintTable.Get("cancelled_by_user"),
+                };
+                current["finished_at"] = DateTime.UtcNow.ToString("o");
+                WriteProgressAtomic(path, current);
+                return new JObject
+                {
+                    ["ok"] = true,
+                    ["job_id"] = jobId,
+                    ["previous_state"] = state,
+                    ["new_state"] = "aborted",
+                    ["note"] = "orphan marked aborted",
+                };
+            }
+
+            // Case 3: 활성 job이고 queued 상태 — OneShot 구독 해제로 협조적 취소
+            if (_pendingJobId == jobId)
+            {
+                EditorApplication.update -= OneShotBuild;
+                _pendingJobId = null;
+                _pendingParams = null;
+                _activeJobId = null;
+
+                JObject prog;
+                if (File.Exists(path))
+                    prog = JObject.Parse(StripBom(File.ReadAllText(path)));
+                else
+                    prog = new JObject { ["schema_version"] = 1, ["job_id"] = jobId };
+
+                prog["state"] = "aborted";
+                prog["error"] = new JObject
+                {
+                    ["kind"] = "cancelled_by_user",
+                    ["message"] = "Cancelled before OneShotBuild fired",
+                    ["hint"] = HintTable.Get("cancelled_by_user"),
+                };
+                prog["finished_at"] = DateTime.UtcNow.ToString("o");
+                WriteProgressAtomic(path, prog);
+
+                return new JObject
+                {
+                    ["ok"] = true,
+                    ["job_id"] = jobId,
+                    ["previous_state"] = "queued",
+                    ["new_state"] = "aborted",
+                    ["note"] = "OneShot unsubscribed",
+                };
+            }
+
+            // Case 4: 활성 job이지만 이미 running 이상 — 취소 불가
+            return BuildError(
+                "not_cancellable",
+                $"Job {jobId} is running (past queued state). BuildPipeline.BuildPlayer has no interrupt API once executing.",
+                "wait for completion, or force-kill editor (unintended build artifacts possible)"
+            );
+        }
+
         // ---------------------------------
         // OneShot callback
         // ---------------------------------
@@ -337,6 +432,26 @@ namespace Unictl.Internal
             try { System.Diagnostics.Process.GetProcessById(pid); return true; }
             catch { return false; }
         }
+
+        /// <summary>진행 파일을 tmp 경유 원자적으로 덮어쓰기.</summary>
+        static void WriteProgressAtomic(string path, JObject content)
+        {
+            try
+            {
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                var tmp = path + ".tmp";
+                File.WriteAllText(tmp, content.ToString(), Encoding.UTF8);
+                if (File.Exists(path)) File.Replace(tmp, path, null);
+                else File.Move(tmp, path);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[unictl] WriteProgressAtomic failed for {path}: {ex.Message}");
+            }
+        }
+
+        /// <summary>BOM(U+FEFF) 제거 — File.ReadAllText가 BOM을 남기는 경우 대비.</summary>
+        static string StripBom(string s) => s.Length > 0 && s[0] == '﻿' ? s.Substring(1) : s;
     }
 
     // ---------------------------------
