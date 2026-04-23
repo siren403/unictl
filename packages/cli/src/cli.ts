@@ -2,6 +2,8 @@
 import { defineCommand, runMain } from "citty";
 import { readFileSync } from "fs";
 import { command, health } from "./client";
+import { buildCmd } from "./build";
+import { runCompile } from "./compile";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
@@ -468,6 +470,51 @@ const editorCmd = defineCommand({
   },
 });
 
+const compileCmd = defineCommand({
+  meta: {
+    name: "compile",
+    description: "Run Unity in batchmode to compile + generate .meta files without opening the editor.",
+  },
+  args: {
+    project: {
+      type: "string",
+      description: "Unity project path (auto-detected if omitted)",
+    },
+    timeout: {
+      type: "string",
+      description: "Timeout in seconds (default: none)",
+    },
+    logFile: {
+      type: "string",
+      description: "Custom log file path (default: Temp/unictl-compile-<ts>.log)",
+    },
+  },
+  run: async ({ args }) => {
+    try {
+      const timeoutSec = args.timeout != null ? Number(args.timeout) : undefined;
+      const result = await runCompile({
+        project: args.project,
+        timeout: timeoutSec,
+        logFile: args.logFile,
+      });
+      output(result);
+      if (!result.success) process.exit(1);
+    } catch (e: any) {
+      const kind: string | undefined = e.kind;
+      if (kind === "editor_running" || kind === "project_locked") {
+        output({ error: e.message, kind });
+        process.exit(3);
+      }
+      if (kind === "timeout") {
+        output({ error: e.message, kind, duration_ms: e.duration_ms, log_file: e.log_file });
+        process.exit(124);
+      }
+      output({ error: e.message });
+      process.exit(125);
+    }
+  },
+});
+
 const commandCmd = defineCommand({
   meta: {
     name: "command",
@@ -613,9 +660,13 @@ const main = defineCommand({
 QUICK START (run in order):
   1. unictl health                          # verify editor connection
   2. unictl command list                    # discover all tools and actions
-  3. unictl command <TOOL> -p action=<ACT>  # invoke a tool`,
+  3. unictl command <TOOL> -p action=<ACT>  # invoke a tool
+  4. unictl build --target X --wait        # build the project
+  5. unictl compile                         # headless compile + .meta gen`,
   },
   subCommands: {
+    build: buildCmd,
+    compile: compileCmd,
     command: commandCmd,
     doctor: doctorCmd,
     editor: editorCmd,

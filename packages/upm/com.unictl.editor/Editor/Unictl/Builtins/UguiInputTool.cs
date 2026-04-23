@@ -14,7 +14,7 @@ namespace Unictl.Tools
     {
         public class Parameters
         {
-            [ToolParameter("Action: inspect, click, set_text, set_toggle, set_slider, set_dropdown, scroll, find", Required = true)]
+            [ToolParameter("Action: inspect, click, set_text, set_toggle, set_slider, set_dropdown, scroll, find", Required = true, Enum = "inspect,click,set_text,set_toggle,set_slider,set_dropdown,scroll,find")]
             public string Action { get; set; }
         }
 

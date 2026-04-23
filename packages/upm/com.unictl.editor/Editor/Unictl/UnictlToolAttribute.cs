@@ -17,6 +17,8 @@ namespace Unictl
         public string Description { get; set; }
         public bool Required { get; set; } = false;
         public string DefaultValue { get; set; }
+        /// <summary>쉼표로 구분된 허용 값 목록. 지정 시 schema에 enum 필드로 노출된다.</summary>
+        public string Enum { get; set; }
 
         public ToolParameterAttribute(string description)
         {

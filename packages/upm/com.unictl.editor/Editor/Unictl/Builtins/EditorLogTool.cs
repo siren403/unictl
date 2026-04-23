@@ -24,7 +24,7 @@ namespace Unictl.Tools
 
         public class Parameters
         {
-            [ToolParameter("Action: tail, search, errors, game_logs, clear_game_logs. Use 'errors' to check compile/exception failures.", Required = true)]
+            [ToolParameter("Action: tail, search, errors, game_logs, clear_game_logs. Use 'errors' to check compile/exception failures.", Required = true, Enum = "tail,search,errors,game_logs,clear_game_logs")]
             public string Action { get; set; }
         }
 

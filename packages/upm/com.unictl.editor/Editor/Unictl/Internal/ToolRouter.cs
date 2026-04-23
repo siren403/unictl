@@ -140,23 +140,20 @@ namespace Unictl
             return string.Join(" ", parts);
         }
 
-        private static string[] TryParseEnum(string description)
+        private static string[] ParseEnumAttribute(string enumValue)
         {
-            if (string.IsNullOrEmpty(description)) return null;
-            var match = System.Text.RegularExpressions.Regex.Match(
-                description, @"^[^:]+:\s*(.+)$");
-            if (!match.Success) return null;
-            var values = match.Groups[1].Value
-                .Split(new[] { ',', ' ' }, StringSplitOptions.RemoveEmptyEntries)
+            if (string.IsNullOrWhiteSpace(enumValue)) return null;
+            var values = enumValue
+                .Split(new[] { ',' }, StringSplitOptions.RemoveEmptyEntries)
                 .Select(v => v.Trim())
-                .Where(v => v.Length > 0 && !v.Contains("(") && !v.Contains(")"))
+                .Where(v => v.Length > 0)
                 .ToArray();
-            return values.Length >= 2 ? values : null;
+            return values.Length >= 1 ? values : null;
         }
 
         private static object BuildParamSchema(string name, ToolParameterAttribute attr)
         {
-            var enumValues = TryParseEnum(attr.Description);
+            var enumValues = ParseEnumAttribute(attr.Enum);
             if (enumValues != null)
             {
                 return new

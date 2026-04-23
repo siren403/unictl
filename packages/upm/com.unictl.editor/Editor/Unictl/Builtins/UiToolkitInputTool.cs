@@ -14,7 +14,7 @@ public static class UiToolkitInputTool
 {
     public class Parameters
     {
-        [ToolParameter("Action: inspect, inspect_render, click, set_value, or scroll", Required = true)]
+        [ToolParameter("Action: inspect, inspect_render, click, set_value, or scroll", Required = true, Enum = "inspect,inspect_render,click,set_value,scroll")]
         public string Action { get; set; }
 
         [ToolParameter("Element path from inspect output, for example: 0/1/0", Required = false)]

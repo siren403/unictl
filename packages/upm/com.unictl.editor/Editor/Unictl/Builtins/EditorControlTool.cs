@@ -19,7 +19,7 @@ namespace Unictl.Tools
 
         public class Parameters
         {
-            [ToolParameter("Action: play, stop, refresh, compile, restart, status, quit, load_scene", Required = true)]
+            [ToolParameter("Action: play, stop, refresh, compile, restart, status, quit, load_scene", Required = true, Enum = "play,stop,refresh,compile,restart,status,quit,load_scene")]
             public string Action { get; set; }
         }
 
