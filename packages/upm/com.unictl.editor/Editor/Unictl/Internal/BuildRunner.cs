@@ -72,7 +72,7 @@ namespace Unictl.Internal
 
             // 활성 표시 + queued 상태 기록
             _activeJobId = jobId;
-            WriteProgress(jobId, State.Queued, p, null, null);
+            WriteProgress(jobId, State.Queued, p, null, null, null);
 
             // OneShot 등록 (WebForge 패턴)
             _pendingJobId = jobId;
@@ -106,21 +106,36 @@ namespace Unictl.Internal
                 // 다음 틱 재확인 (컴파일 등이 끼어들 경우 대비)
                 if (EditorApplication.isCompiling || EditorApplication.isUpdating)
                 {
-                    WriteProgress(jobId, State.Failed, p, null,
+                    WriteProgress(jobId, State.Failed, p, null, null,
                         new ErrorInfo("editor_busy", "Editor became busy before build could start."));
                     _activeJobId = null;
                     if (Application.isBatchMode) EditorApplication.Exit(3);
                     return;
                 }
 
-                WriteProgress(jobId, State.Running, p, null, null);
+                WriteProgress(jobId, State.Running, p, null, null, null);
 
                 var opts = BuildBuildPlayerOptions(p);
                 var report = BuildPipeline.BuildPlayer(opts);
                 var summary = report.summary;
                 var terminal = summary.result == BuildResult.Succeeded ? State.Done : State.Failed;
 
-                WriteProgress(jobId, terminal, p, summary, terminal == State.Failed
+                // Phase 2b: 빌드 성공 시에만 산출물 메타데이터 계산
+                JObject metadata = null;
+                if (terminal == State.Done)
+                {
+                    try
+                    {
+                        TryParseBuildTarget(p.Target, out _, out var builtTarget);
+                        metadata = BuildMetadata.Compute(summary.outputPath, builtTarget);
+                    }
+                    catch (Exception metaEx)
+                    {
+                        Debug.LogWarning($"[unictl] BuildMetadata.Compute failed (non-fatal): {metaEx.Message}");
+                    }
+                }
+
+                WriteProgress(jobId, terminal, p, summary, metadata, terminal == State.Failed
                     ? new ErrorInfo("build_failed",
                         $"Build {summary.result}: {summary.totalErrors} error(s), {summary.totalWarnings} warning(s).")
                     : null);
@@ -130,7 +145,7 @@ namespace Unictl.Internal
             }
             catch (Exception ex)
             {
-                WriteProgress(jobId, State.Failed, p, null,
+                WriteProgress(jobId, State.Failed, p, null, null,
                     new ErrorInfo("build_exception", $"{ex.GetType().Name}: {ex.Message}"));
                 if (Application.isBatchMode) EditorApplication.Exit(1);
             }
@@ -144,7 +159,7 @@ namespace Unictl.Internal
         // Progress file writer
         // ---------------------------------
 
-        static void WriteProgress(string jobId, State state, BuildParams p, BuildSummary? summary, ErrorInfo err)
+        static void WriteProgress(string jobId, State state, BuildParams p, BuildSummary? summary, JObject metadata, ErrorInfo err)
         {
             try
             {
@@ -162,7 +177,7 @@ namespace Unictl.Internal
                 if (summary.HasValue)
                 {
                     progress["finished_at"] = DateTime.UtcNow.ToString("o");
-                    progress["report_summary"] = new JObject
+                    var reportSummary = new JObject
                     {
                         ["result"] = summary.Value.result.ToString(),
                         ["total_errors"] = summary.Value.totalErrors,
@@ -170,6 +185,15 @@ namespace Unictl.Internal
                         ["output_path"] = summary.Value.outputPath,
                         ["build_time_ms"] = (long)summary.Value.totalTime.TotalMilliseconds,
                     };
+
+                    // Phase 2b: 산출물 메타데이터 필드 병합
+                    if (metadata != null)
+                    {
+                        foreach (var prop in metadata.Properties())
+                            reportSummary[prop.Name] = prop.Value;
+                    }
+
+                    progress["report_summary"] = reportSummary;
                 }
 
                 if (err != null)
