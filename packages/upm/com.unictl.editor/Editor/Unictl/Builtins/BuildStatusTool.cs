@@ -1,4 +1,5 @@
 using System.IO;
+using System.Threading;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unictl.Internal;
@@ -62,24 +63,33 @@ namespace Unictl.Builtins
                     });
             }
 
-            try
+            // §2.4 reader retry: 3 attempts, 200ms interval (JSON parse error 또는 IOException 시)
+            const int maxAttempts = 3;
+            System.Exception lastEx = null;
+            for (int attempt = 0; attempt < maxAttempts; attempt++)
             {
-                var content = File.ReadAllText(progressPath);
-                var json = JObject.Parse(content);
-                return new SuccessResponse($"Build status for job {jobId}", json);
+                if (attempt > 0)
+                    Thread.Sleep(200);
+
+                try
+                {
+                    var content = File.ReadAllText(progressPath);
+                    var json = JObject.Parse(content);
+                    return new SuccessResponse($"Build status for job {jobId}", json);
+                }
+                catch (IOException ex) { lastEx = ex; }
+                catch (JsonException ex) { lastEx = ex; }
             }
-            catch (JsonException ex)
-            {
-                return new ErrorResponse(
-                    $"Failed to parse progress file for job {jobId}: {ex.Message}",
-                    new
-                    {
-                        kind = "invalid_param",
-                        hint = HintTable.Get("invalid_param"),
-                        job_id = jobId,
-                        path = progressPath,
-                    });
-            }
+
+            return new ErrorResponse(
+                $"Failed to read progress file for job {jobId} after {maxAttempts} attempts: {lastEx?.Message}",
+                new
+                {
+                    kind = "invalid_param",
+                    hint = HintTable.Get("invalid_param"),
+                    job_id = jobId,
+                    path = progressPath,
+                });
         }
     }
 }

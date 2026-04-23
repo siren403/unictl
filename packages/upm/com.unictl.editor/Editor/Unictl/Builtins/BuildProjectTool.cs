@@ -1,3 +1,4 @@
+using System;
 using Newtonsoft.Json.Linq;
 using Unictl.Internal;
 
@@ -5,7 +6,7 @@ namespace Unictl.Builtins
 {
     [UnictlTool(
         Name = "build_project",
-        Description = "Build a Unity player. See: unictl build --help. Long-running; returns {ok,job_id,state:'preparing'|'running'} immediately. Poll with build_status; cancel with build_cancel.")]
+        Description = "Build a Unity player. See: unictl build --help. Long-running; returns {ok,job_id,state:'queued'} immediately. Poll with build_status; cancel with build_cancel.")]
     public static class BuildProjectTool
     {
         public class Parameters
@@ -43,7 +44,7 @@ namespace Unictl.Builtins
 
         public static object HandleCommand(JObject parameters)
         {
-            // Empty-param invocation returns a usage success envelope (plan §2.7(C))
+            // 빈 파라미터 → usage envelope 반환 (plan §2.7(C))
             if (parameters == null || !parameters.HasValues)
             {
                 return new SuccessResponse(
@@ -77,14 +78,49 @@ namespace Unictl.Builtins
                     });
             }
 
-            // Params present but real routing not yet implemented (lands in P2a.1)
-            return new ErrorResponse(
-                "unictl build_project is scaffolded in P1; actual build routing lands in P2a.1.",
+            // 파라미터 파싱 (§3)
+            BuildParams p;
+            try
+            {
+                p = BuildParams.FromJObject(parameters);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse(
+                    $"Failed to parse build parameters: {ex.Message}",
+                    new { kind = "invalid_param", hint = HintTable.Get("invalid_param") });
+            }
+
+            // job_id 결정
+            if (string.IsNullOrEmpty(p.JobId))
+                p.JobId = Guid.NewGuid().ToString("N");
+
+            // ScheduleBuild — preflight + OneShot 등록
+            var result = BuildRunner.ScheduleBuild(p, p.JobId);
+
+            // ok=false → 에러 응답
+            if (result["ok"]?.ToObject<bool>() == false)
+            {
+                var err = result["error"] as JObject;
+                return new ErrorResponse(
+                    err?["message"]?.ToString() ?? "Build scheduling failed.",
+                    new
+                    {
+                        kind = err?["kind"]?.ToString() ?? "unknown",
+                        hint = err?["hint"]?.ToString(),
+                        job_id = p.JobId,
+                    });
+            }
+
+            return new SuccessResponse(
+                "Build scheduled",
                 new
                 {
-                    kind = "not_yet_implemented",
-                    hint = HintTable.Get("not_yet_implemented"),
-                    phase_needed = "P2a.1",
+                    job_id = p.JobId,
+                    state = "queued",
+                    progress_file = $"Library/unictl-builds/{p.JobId}.json",
+                    lane = "ipc",
+                    hint = $"Poll with: unictl command build_status -p job_id={p.JobId}",
                 });
         }
     }
