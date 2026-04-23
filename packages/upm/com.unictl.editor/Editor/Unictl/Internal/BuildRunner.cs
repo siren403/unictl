@@ -55,6 +55,12 @@ namespace Unictl.Internal
             if (!BuildPipeline.IsBuildTargetSupported(group, target))
                 return BuildError("target_unsupported", $"BuildTarget '{p.Target}' is not supported by this Unity installation.", null);
 
+            // BuildProfile: Unity 6000.0+ 요구
+            if (!string.IsNullOrEmpty(p.BuildProfile) && !BuildProfileAdapter.Supported)
+                return BuildError("profile_unsupported_on_this_unity",
+                    "BuildProfile requires Unity 6000.0+. Remove --build-profile or upgrade editor.",
+                    null);
+
             // BuildProfile: IPC lane에서는 거부 (domain reload 필요)
             if (!Application.isBatchMode && !string.IsNullOrEmpty(p.BuildProfile))
                 return BuildError("profile_switch_requires_batch",

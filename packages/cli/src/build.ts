@@ -182,11 +182,20 @@ EXIT CODES:
       } else {
         relPath = raw.replace(/\\/g, "/");
       }
-      // 존재 여부 확인 (프로젝트 루트 기준)
+      // 경로 traversal 방지 — 프로젝트 루트 외부 경로 거부
       const absPath = resolve(projectRoot, relPath);
+      const normalizedRoot = resolve(projectRoot);
+      if (absPath !== normalizedRoot && !absPath.startsWith(normalizedRoot + "\\") && !absPath.startsWith(normalizedRoot + "/")) {
+        errorExit(
+          2,
+          "profile_invalid_path",
+          `--build-profile must resolve inside the project root: "${absPath}"`,
+          "BuildProfile path must resolve inside the project root."
+        );
+      }
       if (!existsSync(absPath)) {
         errorExit(
-          3,
+          2,
           "profile_not_found",
           `BuildProfile asset not found: "${absPath}" (resolved from "${raw}")`,
           "BuildProfile asset not found at the given path. Verify path relative to project root."
