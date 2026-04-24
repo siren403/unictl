@@ -13,6 +13,7 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 - CI smoke workflow: `bun run unictl -- --help` failed on all 3 OS runners with "Script not found". Added `unictl` script to root `package.json` so the ergonomic pattern works in the standalone repo checkout context (previously only worked inside PickUpCat consumer-monorepo).
+- Windows process discovery on modern runners (Windows Server 2022, Windows 11 recent): `listUnityProcessesWindows` propagated a `wmic` ENOENT exception when `Get-CimInstance` returned empty stdout (zero Unity processes). Two fixes: (1) CIM empty-stdout is now treated as "zero processes" instead of "CIM failed + fallthrough to wmic", (2) wmic fallback itself is wrapped in try/catch returning `[]` on ENOENT. `doctor`/`editor status`/`health` no longer crash on Unity-absent Windows runners.
 
 ---
 

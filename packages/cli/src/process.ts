@@ -82,7 +82,7 @@ export function listUnityProcessesMac(): UnityProcess[] {
 }
 
 export function listUnityProcessesWindows(): UnityProcess[] {
-  // Primary: PowerShell Get-CimInstance (wmic is deprecated/removed on Windows 11+)
+  // Primary: PowerShell Get-CimInstance (wmic is deprecated/removed on Windows 11+ and Server 2022+)
   try {
     const cimResult = Bun.spawnSync([
       "powershell",
@@ -90,16 +90,24 @@ export function listUnityProcessesWindows(): UnityProcess[] {
       "-Command",
       "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'Unity*.exe' } | Select-Object ProcessId,CommandLine,ExecutablePath | ConvertTo-Json -Compress",
     ]);
-    const cimOut = cimResult.stdout.toString().trim();
-    if (cimResult.exitCode === 0 && cimOut) {
-      return parseCimJson(cimOut);
+    if (cimResult.exitCode === 0) {
+      const cimOut = cimResult.stdout.toString().trim();
+      // Empty output = zero Unity processes (valid result, not a failure).
+      // Non-empty = parse. Either way, return — do NOT fall through to wmic.
+      return cimOut ? parseCimJson(cimOut) : [];
     }
   } catch (_err) {
-    // fall through to wmic
+    // PowerShell itself missing or spawn failure — fall through to wmic legacy fallback.
   }
 
-  // Fallback: legacy wmic (Windows 10 and earlier)
-  return listUnityProcessesWmic();
+  // Fallback: legacy wmic (may not exist on modern Windows). ENOENT = zero processes.
+  try {
+    return listUnityProcessesWmic();
+  } catch (_err) {
+    // wmic not found or spawn failure. CIM already failed above. Return empty list
+    // instead of propagating an uncaught exception into doctor/editor/health paths.
+    return [];
+  }
 }
 
 function parseCimJson(raw: string): UnityProcess[] {
