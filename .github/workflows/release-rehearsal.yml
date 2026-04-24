@@ -1,0 +1,69 @@
+name: release-rehearsal
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Rehearsal version tag (e.g. 0.4.0-test)'
+        required: true
+        default: '0.4.0-test'
+
+jobs:
+  rehearse:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: latest
+
+      - name: Install deps
+        run: bun install
+
+      - name: Verify clean tree before rehearsal
+        run: |
+          if [[ -n $(git status --porcelain) ]]; then
+            echo "::error::working tree must be clean before release rehearsal"
+            git status
+            exit 1
+          fi
+        shell: bash
+
+      - name: Run release --dry-run
+        run: bun run release "${{ inputs.version }}" --dry-run
+
+      - name: Verify version sync touched 5 files
+        run: |
+          changed=$(git status --porcelain | grep -E "(package\.json|plugin\.config\.json|support-pack\.json)$" | wc -l)
+          if [[ "$changed" -ne "5" ]]; then
+            echo "::error::expected 5 version-synced files, got $changed"
+            git status --porcelain
+            exit 1
+          fi
+          echo "OK: 5 files version-synced as expected"
+        shell: bash
+
+      - name: Verify assemble artifacts present
+        run: |
+          if [[ ! -d .tmp/phase-e-release ]]; then
+            echo "::error::.tmp/phase-e-release directory missing"
+            exit 1
+          fi
+          ls -la .tmp/phase-e-release/
+        shell: bash
+
+      - name: Verify NO git tag created
+        run: |
+          if git tag --list | grep -q "v${{ inputs.version }}"; then
+            echo "::error::--dry-run should not create tag, but v${{ inputs.version }} exists"
+            exit 1
+          fi
+          echo "OK: no tag created"
+        shell: bash
+
+      - name: Cleanup (revert version changes)
+        if: always()
+        run: |
+          git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json 2>/dev/null || true
+        shell: bash

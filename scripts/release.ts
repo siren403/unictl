@@ -9,30 +9,49 @@
  *   bun run release 0.2.0    → exact version
  *
  * Flags:
- *   --no-publish    skip npm publish (git only)
+ *   --no-publish    skip npm publish only; still does commit/tag/push
+ *   --dry-run       skip git push, git tag, git push tag, AND npm publish;
+ *                   runs version sync + assemble + validation only; exits 0 on success
  *
- * Does:
- *   1. Bump version in all package.json files
- *   2. Commit
- *   3. Tag vX.Y.Z
- *   4. Push main + tag
- *   5. npm publish packages/cli (unless --no-publish)
+ * Safe release order (eliminates orphan-tag risk):
+ *   1. Bump version in all package.json + integration metadata files
+ *   2. Validate CHANGELOG.md has populated [Unreleased] section
+ *   3. git add + commit "release: v<ver>"  (local only)
+ *   4. npm publish packages/cli  (skip if --no-publish or --dry-run)
+ *   5. git push origin main      (skip if --dry-run)
+ *   6. git tag v<ver>            (skip if --dry-run)
+ *   7. git push origin v<ver>    (skip if --dry-run)
+ *
+ * Rationale: publish before push so a failed push never leaves an orphan public tag.
+ * If step 4 fails, no public artifact exists; re-run is safe (idempotency guard).
+ * If step 5 fails, published tarball exists but commit not yet public; manual: git push origin main.
+ * If steps 6-7 fail, published + pushed but untagged; manual: git tag v<ver> HEAD && git push origin v<ver>.
+ * See docs/standalone/release-process.md for full recovery table.
  */
 
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
 
-const ROOT = import.meta.dir + "/..";
+const ROOT = join(import.meta.dir, "..");
 
 // All package.json files that share the unictl version.
 // Listed in the order we update them; release.ts always syncs them.
 const VERSIONED_PACKAGES = [
-  join(ROOT, "package.json"),                                       // repo meta
-  join(ROOT, "packages/cli/package.json"),                          // npm-published CLI
-  join(ROOT, "packages/upm/com.unictl.editor/package.json"),        // Unity UPM
+  join(ROOT, "package.json"),                                      // repo meta
+  join(ROOT, "packages/cli/package.json"),                         // npm-published CLI
+  join(ROOT, "packages/upm/com.unictl.editor/package.json"),       // Unity UPM
 ];
 
+// Integration metadata files also version-matched at release.
+const VERSIONED_INTEGRATIONS = [
+  join(ROOT, "integrations/codex/plugin.config.json"),
+  join(ROOT, "integrations/claude-code/support-pack.json"),
+];
+
+const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS];
+
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
+const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
 
 function readVersion(): string {
   const pkg = JSON.parse(readFileSync(VERSIONED_PACKAGES[0], "utf-8"));
@@ -40,23 +59,68 @@ function readVersion(): string {
 }
 
 function bumpVersion(current: string, type: string): string {
-  if (/^\d+\.\d+\.\d+$/.test(type)) return type;
+  if (/^\d+\.\d+\.\d+(-[\w.]+)?$/.test(type)) return type;
 
   const [major, minor, patch] = current.split(".").map(Number);
   switch (type) {
     case "major": return `${major + 1}.0.0`;
     case "minor": return `${major}.${minor + 1}.0`;
     case "patch": return `${major}.${minor}.${patch + 1}`;
-    default: return `${major}.${minor}.${patch + 1}`;
+    default:      return `${major}.${minor}.${patch + 1}`;
   }
 }
 
 function updatePackageJsons(version: string): void {
-  for (const path of VERSIONED_PACKAGES) {
+  for (const path of ALL_VERSIONED) {
     const pkg = JSON.parse(readFileSync(path, "utf-8"));
     pkg.version = version;
     writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
   }
+}
+
+function validateChangelog(version: string): void {
+  if (!existsSync(CHANGELOG_PATH)) {
+    console.error(`\n  ERROR: CHANGELOG.md not found at ${CHANGELOG_PATH}`);
+    console.error(`  Create CHANGELOG.md with an [Unreleased] section before releasing.\n`);
+    process.exit(1);
+  }
+
+  const content = readFileSync(CHANGELOG_PATH, "utf-8");
+
+  // Must have an [Unreleased] section
+  if (!content.includes("## [Unreleased]")) {
+    console.error(`\n  ERROR: CHANGELOG.md has no [Unreleased] section.`);
+    console.error(`  Add an [Unreleased] section with at least one entry before releasing.\n`);
+    process.exit(1);
+  }
+
+  // Extract the [Unreleased] section content (between ## [Unreleased] and the next ##)
+  const unreleasedMatch = content.match(/## \[Unreleased\]([\s\S]*?)(?=\n## \[|$)/);
+  if (!unreleasedMatch) {
+    console.error(`\n  ERROR: Could not parse [Unreleased] section in CHANGELOG.md.\n`);
+    process.exit(1);
+  }
+
+  const unreleasedBody = unreleasedMatch[1].trim();
+  // Must have at least one bullet line
+  if (!unreleasedBody || !/^[-*]/m.test(unreleasedBody)) {
+    console.error(`\n  ERROR: CHANGELOG.md [Unreleased] section has no entries.`);
+    console.error(`  Add at least one bullet under Added/Changed/Fixed/etc. before releasing.\n`);
+    process.exit(1);
+  }
+}
+
+function checkIdempotency(version: string): boolean {
+  // Check if package.json already at target version AND a release commit for it exists
+  const current = readVersion();
+  if (current !== version) return false;
+
+  const result = Bun.spawnSync(
+    ["git", "log", "--oneline", "--grep", `release: v${version}`, "-1"],
+    { cwd: ROOT, stdout: "pipe", stderr: "pipe" }
+  );
+  const output = result.stdout.toString().trim();
+  return output.length > 0;
 }
 
 function run(cmd: string[], opts?: { cwd?: string }): void {
@@ -66,32 +130,111 @@ function run(cmd: string[], opts?: { cwd?: string }): void {
     stderr: "inherit",
   });
   if (result.exitCode !== 0) {
-    console.error(`Failed: ${cmd.join(" ")}`);
+    console.error(`\n  Failed: ${cmd.join(" ")}\n`);
     process.exit(1);
+  }
+}
+
+function runAssemble(version: string, outputDir?: string): void {
+  const assembleScript = join(ROOT, "scripts", "release", "assemble.ts");
+  const args = ["bun", "run", assembleScript];
+  if (outputDir) {
+    args.push("--output", outputDir);
+  }
+  console.log("\n  Running assemble.ts...\n");
+  const result = Bun.spawnSync(args, {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "inherit",
+    env: { ...process.env },
+  });
+  if (result.exitCode !== 0) {
+    console.error(`\n  assemble.ts failed\n`);
+    process.exit(1);
+  }
+  try {
+    const parsed = JSON.parse(result.stdout.toString());
+    if (!parsed.success) {
+      console.error(`\n  assemble.ts reported failure: ${parsed.message}\n`);
+      if (parsed.data?.mismatches) {
+        console.error("  Version mismatches:", JSON.stringify(parsed.data.mismatches, null, 2));
+      }
+      process.exit(1);
+    }
+    console.log(`  assemble: ${parsed.message}`);
+    if (parsed.data?.output_root) {
+      console.log(`  artifacts at: ${parsed.data.output_root}`);
+    }
+  } catch {
+    // assemble printed non-JSON; treat as success if exit 0
+    console.log("  assemble.ts completed.");
   }
 }
 
 // --- main ---
 
 const args = process.argv.slice(2);
-const skipPublish = args.includes("--no-publish");
-const bumpArg = args.find((a) => !a.startsWith("--")) ?? "patch";
 
+// Mutex: --dry-run and --no-publish are mutually exclusive
+const isDryRun    = args.includes("--dry-run");
+const skipPublish = args.includes("--no-publish");
+
+if (isDryRun && skipPublish) {
+  console.error("\n  ERROR: --dry-run and --no-publish are mutually exclusive.\n");
+  process.exit(1);
+}
+
+const bumpArg = args.find((a) => !a.startsWith("--")) ?? "patch";
 const current = readVersion();
 const next = bumpVersion(current, bumpArg);
 
-console.log(`\n  ${current} → ${next}${skipPublish ? " (git only)" : ""}\n`);
+const modeLabel = isDryRun ? " (dry-run)" : skipPublish ? " (git only)" : "";
+console.log(`\n  ${current} → ${next}${modeLabel}\n`);
 
+// Idempotency guard
+if (checkIdempotency(next)) {
+  console.log(`  Already at v${next} with a release commit. Nothing to do.`);
+  process.exit(0);
+}
+
+// Step 1: version sync (all package.json + integration metadata)
+console.log("  Step 1: version sync");
 updatePackageJsons(next);
 
-run(["git", "add", ...VERSIONED_PACKAGES]);
+// Step 2: validate CHANGELOG.md
+console.log("  Step 2: validate CHANGELOG.md");
+validateChangelog(next);
+
+// Post-version-sync: run assemble.ts to build integration artifacts + checksums
+console.log("  Step 3: assemble integration artifacts");
+runAssemble(next);
+
+if (isDryRun) {
+  console.log("\n  Dry-run complete. Version sync + assemble + validation passed.");
+  console.log("  No commit, tag, push, or publish performed.\n");
+  process.exit(0);
+}
+
+// Step 3: local commit
+console.log("  Step 4: git commit (local)");
+run(["git", "add", ...ALL_VERSIONED]);
 run(["git", "commit", "-m", `release: v${next}`]);
-run(["git", "tag", `v${next}`]);
-run(["git", "push", "origin", "main", `v${next}`]);
 
 if (!skipPublish) {
-  console.log("\n  npm publish packages/cli\n");
+  // Step 4: npm publish
+  console.log("\n  Step 5: npm publish packages/cli\n");
   run(["npm", "publish", "--access", "public"], { cwd: CLI_PACKAGE_DIR });
 }
 
-console.log(`\n  ✓ v${next} released\n`);
+// Step 5: git push main
+console.log("\n  Step 6: git push origin main\n");
+run(["git", "push", "origin", "main"]);
+
+// Steps 6-7: tag + push tag
+console.log(`\n  Step 7: git tag v${next}\n`);
+run(["git", "tag", `v${next}`]);
+
+console.log(`\n  Step 8: git push origin v${next}\n`);
+run(["git", "push", "origin", `v${next}`]);
+
+console.log(`\n  v${next} released\n`);

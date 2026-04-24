@@ -1,12 +1,12 @@
 {
   "name": "unictl",
-  "version": "0.3.0",
+  "version": "{{VERSION}}",
   "description": "Use unictl to connect Codex with Unity editor install, doctor, and lifecycle workflows.",
   "author": {
     "name": "unictl"
   },
-  "homepage": "https://github.com/siren403/unictl",
-  "repository": "https://github.com/siren403/unictl",
+  "homepage": "https://github.com/{{OWNER}}/{{REPO}}",
+  "repository": "https://github.com/{{OWNER}}/{{REPO}}",
   "license": "MIT",
   "keywords": [
     "unity",
@@ -24,9 +24,9 @@
       "Interactive",
       "Write"
     ],
-    "websiteURL": "https://github.com/siren403/unictl",
-    "privacyPolicyURL": "https://github.com/siren403/unictl",
-    "termsOfServiceURL": "https://github.com/siren403/unictl",
+    "websiteURL": "https://github.com/{{OWNER}}/{{REPO}}",
+    "privacyPolicyURL": "https://github.com/{{OWNER}}/{{REPO}}",
+    "termsOfServiceURL": "https://github.com/{{OWNER}}/{{REPO}}",
     "defaultPrompt": [
       "Connect to a Unity project with unictl and run doctor before editing"
     ],

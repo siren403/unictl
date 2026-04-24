@@ -1,4 +1,4 @@
-import { existsSync, writeFileSync } from "fs";
+import { existsSync, renameSync, writeFileSync } from "fs";
 import { basename, join, resolve } from "path";
 import {
   collectVersionDrift,
@@ -127,18 +127,37 @@ function buildClaudeSupport(
 }
 
 function packZip(stageDir: string, artifactPath: string): void {
-  runCheckedCommand(["zip", "-qr", artifactPath, basename(stageDir)], {
-    cwd: join(stageDir, ".."),
-  });
+  if (process.platform === "win32") {
+    // Use PowerShell Compress-Archive on Windows (zip binary not reliably available)
+    const sourceDir = join(stageDir, "..");
+    const stageName = basename(stageDir);
+    runCheckedCommand(
+      [
+        "pwsh", "-NoProfile", "-Command",
+        `Compress-Archive -Path '${join(sourceDir, stageName)}' -DestinationPath '${artifactPath}' -Force`,
+      ],
+      { cwd: sourceDir }
+    );
+  } else {
+    runCheckedCommand(["zip", "-qr", artifactPath, basename(stageDir)], {
+      cwd: join(stageDir, ".."),
+    });
+  }
 }
 
 function packUpm(outputRoot: string, version: string): string {
   const repoRoot = getRepoRoot();
   const packageParent = join(repoRoot, "packages", "upm");
-  const artifactPath = join(outputRoot, `com.unictl.editor-${version}.tgz`);
-  runCheckedCommand(["tar", "-czf", artifactPath, "com.unictl.editor"], {
+  const artifactName = `com.unictl.editor-${version}.tgz`;
+  const artifactPath = join(outputRoot, artifactName);
+  // Use a relative output path to avoid Windows drive-letter issues with BSD tar.
+  // Write the tgz into packageParent first, then it will be moved to outputRoot below.
+  const tempArtifact = join(packageParent, artifactName);
+  runCheckedCommand(["tar", "-czf", artifactName, "com.unictl.editor"], {
     cwd: packageParent,
   });
+  // Move from packageParent to outputRoot
+  renameSync(tempArtifact, artifactPath);
   return artifactPath;
 }
 

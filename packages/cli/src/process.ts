@@ -12,6 +12,15 @@ export type UnityProcess = {
 };
 
 // ---------------------------------------------------------------------------
+// Lockfile paths
+// ---------------------------------------------------------------------------
+
+/** Canonical Unity lockfile path (Unity 2022+/6). */
+export function getUnityLockfilePath(projectRoot: string): string {
+  return join(projectRoot, "Library", "UnityLockfile");
+}
+
+// ---------------------------------------------------------------------------
 // Unity binary / version resolution
 // ---------------------------------------------------------------------------
 

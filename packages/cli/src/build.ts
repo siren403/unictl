@@ -2,7 +2,7 @@ import { defineCommand } from "citty";
 import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "fs";
 import { join, isAbsolute, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
-import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary } from "./process";
+import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary, getUnityLockfilePath } from "./process";
 import { command } from "./client";
 
 // ---------------------------------------------------------------------------
@@ -280,7 +280,7 @@ EXIT CODES:
 
     // 4. Batchmode lane: UnityLockfile preflight
     if (lane === "batch") {
-      const lockfile = join(projectRoot, "Library", "UnityLockfile");
+      const lockfile = getUnityLockfilePath(projectRoot);
       if (existsSync(lockfile)) {
         errorExit(
           3,

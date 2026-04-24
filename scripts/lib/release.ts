@@ -33,12 +33,10 @@ export function getRepoRoot(): string {
   return repoRoot;
 }
 
-export function getVersionPath(): string {
-  return join(repoRoot, "VERSION");
-}
-
 export function readVersion(): string {
-  return readFileSync(getVersionPath(), "utf-8").trim();
+  const pkgPath = join(repoRoot, "package.json");
+  const pkg = JSON.parse(readFileSync(pkgPath, "utf-8")) as { version: string };
+  return pkg.version;
 }
 
 export function readJsonFile<T>(path: string): T {
@@ -51,9 +49,9 @@ export function writeJsonFile(path: string, value: unknown): void {
 
 export function getVersionTargets(): VersionTarget[] {
   return [
-    { name: "root-package", path: join(repoRoot, "package.json") },
-    { name: "cli-package", path: join(repoRoot, "packages", "cli", "package.json") },
-    { name: "upm-editor-package", path: join(repoRoot, "packages", "upm", "com.unictl.editor", "package.json") },
+    { name: "root-package",        path: join(repoRoot, "package.json") },
+    { name: "cli-package",         path: join(repoRoot, "packages", "cli", "package.json") },
+    { name: "upm-editor-package",  path: join(repoRoot, "packages", "upm", "com.unictl.editor", "package.json") },
     { name: "codex-plugin-config", path: join(repoRoot, "integrations", "codex", "plugin.config.json") },
     { name: "claude-support-config", path: join(repoRoot, "integrations", "claude-code", "support-pack.json") },
   ];

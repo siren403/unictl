@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, statSync } from "fs";
 import { join, resolve } from "path";
 import { getProjectPaths } from "./socket";
-import { getUnityPid, killProcess, readUnityVersion, resolveUnityBinary } from "./process";
+import { getUnityPid, killProcess, readUnityVersion, resolveUnityBinary, getUnityLockfilePath } from "./process";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -45,7 +45,7 @@ export async function runCompile(opts?: {
   }
 
   // Preflight: UnityLockfile 존재 시 project_locked
-  const lockFile = join(projectRoot, "Temp", "UnityLockfile");
+  const lockFile = getUnityLockfilePath(projectRoot);
   if (existsSync(lockFile)) {
     const err = new Error(
       `Unity lockfile exists: ${lockFile}. Another Unity instance may be using this project.`
