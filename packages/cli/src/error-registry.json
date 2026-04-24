@@ -42,14 +42,6 @@
       "since_version": "0.1.0"
     },
     {
-      "kind": "lock_held",
-      "emitted_from": [],
-      "exit_code": 3,
-      "hint_text": "another build is running; cancel or wait: unictl command build_status -p job_id=<id>",
-      "hint_command": "unictl command build_status -p job_id=<YOUR_JOB_ID>",
-      "since_version": "0.1.0"
-    },
-    {
       "kind": "ipc_no_progress_file",
       "emitted_from": ["cli"],
       "exit_code": 3,

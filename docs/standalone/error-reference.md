@@ -12,7 +12,6 @@ This document is auto-generated from `packages/cli/src/error-registry.json`.
 | `editor_busy` | builtin_preflight | 3 | wait for compile/import, or run: unictl editor status |
 | `project_locked` | cli, compile | 3 | stale UnityLockfile; remove it or run: unictl editor quit |
 | `multi_instance` | cli | 3 | multiple editors detected; quit extras before building |
-| `lock_held` | — | 3 | another build is running; cancel or wait: unictl command build_status -p job_id=<id> |
 | `ipc_no_progress_file` | cli | 3 | IPC ack received but no progress file appeared in 3 s; check: unictl doctor |
 | `timeout` | cli, compile | 124 | client wait timeout; build still running; poll: unictl command build_status -p job_id=<id> |
 | `build_exception` | cli, build_runner | 1 | see <job_id>.log for Unity stack trace; re-run with --log-level=debug |

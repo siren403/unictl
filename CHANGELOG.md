@@ -29,6 +29,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - Integration metadata (`integrations/codex/plugin.config.json`, `integrations/claude-code/support-pack.json`) now ships version-matched to the unictl release. `OWNER/REPO` placeholders replaced with `siren403/unictl`.
 - Integration metadata files added to the version-sync list in `release.ts` so they are bumped on every release.
 
+### Removed
+- `lock_held` error kind (zombie entry) removed from `error-registry.json` and `HintTable.cs`. It was never reachable after the WebForge simplification in v0.3.0.
+
 ---
 
 ## [0.3.0] - 2025-04-24
