@@ -82,9 +82,50 @@ export function listUnityProcessesMac(): UnityProcess[] {
 }
 
 export function listUnityProcessesWindows(): UnityProcess[] {
+  // Primary: PowerShell Get-CimInstance (wmic is deprecated/removed on Windows 11+)
+  try {
+    const cimResult = Bun.spawnSync([
+      "powershell",
+      "-NoProfile",
+      "-Command",
+      "Get-CimInstance Win32_Process | Where-Object { $_.Name -like 'Unity*.exe' } | Select-Object ProcessId,CommandLine,ExecutablePath | ConvertTo-Json -Compress",
+    ]);
+    const cimOut = cimResult.stdout.toString().trim();
+    if (cimResult.exitCode === 0 && cimOut) {
+      return parseCimJson(cimOut);
+    }
+  } catch (_err) {
+    // fall through to wmic
+  }
+
+  // Fallback: legacy wmic (Windows 10 and earlier)
+  return listUnityProcessesWmic();
+}
+
+function parseCimJson(raw: string): UnityProcess[] {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    return [];
+  }
+  const items = Array.isArray(parsed) ? parsed : [parsed];
+  return items
+    .map((p) => {
+      if (typeof p !== "object" || p === null) return null;
+      const obj = p as Record<string, unknown>;
+      const pid = Number(obj.ProcessId);
+      if (Number.isNaN(pid)) return null;
+      const command = typeof obj.CommandLine === "string" ? obj.CommandLine : "";
+      return { pid, command };
+    })
+    .filter((proc): proc is UnityProcess => proc !== null);
+}
+
+function listUnityProcessesWmic(): UnityProcess[] {
   // wmic gives us PID and full command line including -projectPath
   const proc = Bun.spawnSync(["wmic", "process", "where",
-    "name='Unity.exe'", "get", "ProcessId,CommandLine", "/FORMAT:CSV"]);
+    "name like 'Unity%.exe'", "get", "ProcessId,CommandLine", "/FORMAT:CSV"]);
   const out = proc.stdout.toString();
 
   return out

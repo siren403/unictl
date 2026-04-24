@@ -1,29 +1,49 @@
 # com.unictl.editor
 
-`com.unictl.editor` is the Unity-side editor package for `unictl`.
+Unity Editor companion package for [unictl](https://github.com/siren403/unictl).
 
-It is the part that consumer Unity projects install through UPM, while operators and agents use the CLI through `bunx github:OWNER/REPO#vX.Y.Z ...`.
+## Install
 
-Scope of this package:
+Add to `Packages/manifest.json`:
 
-- editor server and router
-- native plugin bridge
-- core built-in tools:
-  - `ping`
-  - `editor_control`
-  - `capture_ui`
-  - `ui_toolkit_input`
+```json
+{
+  "dependencies": {
+    "com.unictl.editor": "https://github.com/siren403/unictl.git?path=/packages/upm/com.unictl.editor#v0.3.0"
+  }
+}
+```
 
-Explicitly out of core package scope for `0.1.x`:
+Open the Unity Editor after adding the dependency. The package compiles automatically and the IPC server starts with the editor.
 
-- playmode test orchestration
-- automation profile features
-- profiler diagnostics add-ons
+## What it does
 
-Naming contract for `0.1.x`:
+Runs an IPC server inside the Unity Editor — a named pipe on Windows, a Unix socket on macOS — that the `unictl` CLI connects to for build, compile, editor lifecycle, and UI inspection operations.
 
-- product name: `unictl`
-- public UPM package id: `com.unictl.editor`
-- UPM display name: `Unictl Editor`
+The endpoint name is derived from a SHA256 hash of the project root path, so no configuration files are required. Both the CLI and this package compute the same endpoint name from the same path.
 
-This package intentionally stays lightweight enough to compile without `com.unity.test-framework`.
+## Requirements
+
+- Unity 2022.3 LTS or later
+- Unity 6000.0+ for `--build-profile` / BuildProfile features
+- Windows x64 or macOS (Apple Silicon and Intel)
+- Bun runtime on the operator machine (for the CLI side)
+
+## Built-in commands
+
+| Command | Description |
+|---------|-------------|
+| `build_project` | Trigger a player build (IPC or batchmode lane) |
+| `build_status` | Poll async build job state |
+| `build_cancel` | Cooperatively cancel a queued build |
+| `capture_ui` | Screenshot any Unity UI window to file |
+| `ui_toolkit_input` | Programmatic UI Toolkit click/type events |
+
+## Docs
+
+Full consumer guides and workflows are in the
+[unictl repo docs](https://github.com/siren403/unictl/tree/main/docs/standalone).
+
+## License
+
+MIT

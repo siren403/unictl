@@ -307,7 +307,7 @@ EXIT CODES:
         const err = r.data as Record<string, unknown> | undefined;
         const kind = (err?.kind as string) ?? "unknown";
         // lane 불가 에러 → exit 3
-        const laneErrors = new Set(["editor_busy", "project_locked", "multi_instance", "lock_held", "prepare_required", "target_unsupported", "profile_switch_requires_batch"]);
+        const laneErrors = new Set(["editor_busy", "project_locked", "multi_instance", "target_unsupported", "profile_switch_requires_batch"]);
         const code = laneErrors.has(kind) ? 3 : 2;
         process.stderr.write(JSON.stringify(r) + "\n");
         process.exit(code);

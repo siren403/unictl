@@ -58,21 +58,29 @@ Bun은 TypeScript 네이티브 실행하므로 빌드 단계 없이 동작한다
 ## 버전 관리
 
 ```bash
-bun run release              # patch (0.1.2 → 0.1.3) + npm publish
-bun run release minor        # 0.1.2 → 0.2.0
-bun run release major        # 0.1.2 → 1.0.0
-bun run release 0.3.0        # 정확한 버전
-bun run release --no-publish # git만 (npm publish 스킵)
+bun run release              # patch (0.3.0 → 0.3.1) + npm publish
+bun run release minor        # 0.3.0 → 0.4.0
+bun run release major        # 0.3.0 → 1.0.0
+bun run release 0.4.0        # 정확한 버전
+bun run release --no-publish # 버전 동기화 + git만 (npm publish 스킵)
+bun run release 0.4.0 --dry-run  # 검증만 (push/tag/publish 전부 스킵)
 ```
 
-스크립트 실행 흐름:
-1. `package.json × 3` 버전 동기화
-2. git add + commit: `release: v<ver>`
-3. git tag `v<ver>`
-4. git push main + tag
-5. `cd packages/cli && npm publish --access public`
+스크립트 실행 흐름 (안전한 순서 — orphan tag 방지):
+1. `package.json × 3` 버전 동기화 + git commit: `release: v<ver>` (로컬)
+2. `npm publish` — public artifact 먼저
+3. `git push main` — 소스 커밋 공개
+4. `git tag v<ver>` — publish된 커밋에 태그
+5. `git push origin v<ver>`
 
-**태그는 항상 모든 작업 완료 후에 찍는다.** 중간에 찍으면 태그 사용자가 구버전을 받는다.
+**태그는 npm publish 성공 후 찍어 orphan tag를 방지한다.** publish 전에 태그를 찍으면 태그가 npm에 없는 버전을 가리키는 시간대가 생긴다.
+
+### `--dry-run` vs `--no-publish`
+
+| 플래그 | 스킵하는 것 |
+|--------|------------|
+| `--no-publish` | `npm publish`만 스킵. commit/tag/push는 진행. |
+| `--dry-run` | push/tag/publish 전부 스킵. 버전 동기화 + artifact 조립 + 검증만 실행. CI 릴리즈 리허설용. |
 
 ## IPC 아키텍처
 

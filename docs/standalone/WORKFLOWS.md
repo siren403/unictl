@@ -1,39 +1,107 @@
-# unictl Shared Workflows
+# unictl Workflows
 
-## 1. First Install
+Common operator tasks for `unictl@0.3.0+`.
 
-```bash
-# repo URL 자동, CLI 버전 태그로 UPM 고정
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
-```
-
-## 2. Editor Lifecycle
+## Quick start
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z editor open --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor status --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z health --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor quit --project /ABS/PATH/TO/PROJECT
+# 1. Verify environment
+bunx unictl@latest doctor --project /abs/path/to/project
+
+# 2. Open the editor (or confirm it is already running)
+unictl editor open --project /abs/path/to/project
+
+# 3. List available built-in commands
+unictl command list --project /abs/path/to/project
+
+# 4. Trigger a build
+unictl command build_project -p target=StandaloneWindows64 --project /abs/path/to/project
 ```
 
-## 3. Built-in Tools
+## Build lanes
+
+`unictl` routes build requests automatically:
+
+| Condition | Lane | Notes |
+|-----------|------|-------|
+| Editor running | IPC (named pipe / unix socket) | Fast; preserves editor state |
+| Editor closed | Batchmode | Starts Unity headless |
+
+Override the automatic selection when needed:
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z command ping --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z command editor_control -p action=compile --project /ABS/PATH/TO/PROJECT
-echo '{"output_path":".screenshots/capture.png"}' | bunx github:OWNER/REPO#vX.Y.Z command capture_ui --project /ABS/PATH/TO/PROJECT
-echo '{"action":"click","type":"Button","text":"+ Increment"}' | bunx github:OWNER/REPO#vX.Y.Z command ui_toolkit_input --project /ABS/PATH/TO/PROJECT
+# Force IPC even if editor detection is ambiguous
+unictl command build_project -p target=StandaloneWindows64 --force-ipc --project /abs/path/to/project
+
+# Force batchmode (e.g. CI environment)
+unictl command build_project -p target=StandaloneWindows64 --batch --project /abs/path/to/project
 ```
 
-## 4. Diagnostics
+## Build profiles (Unity 6+)
 
-진단 우선순위:
+`BuildProfile` assets are supported in Unity 6000.0+ and require batchmode:
 
-1. `version`
-2. `doctor`
-3. `editor status`
-4. endpoint file 확인
+```bash
+unictl command build_project \
+  --build-profile Assets/Settings/Profiles/Release.asset \
+  --batch \
+  --project /abs/path/to/project
+```
 
-`doctor`가 실패하면 `manifest.json` 누락, endpoint stale, editor 미기동, version drift를 먼저 본다.
+> Note: `--build-profile` is incompatible with `--force-ipc`. Batchmode is required because
+> BuildProfile assets are resolved by the Unity build pipeline outside of editor play-state.
+
+## Cancel a queued build
+
+`build_cancel` performs a cooperative cancellation at the queue stage. A build already running
+inside `BuildPipeline.BuildPlayer` cannot be interrupted mid-flight.
+
+```bash
+# Cancel by job ID returned from build_project
+unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
+```
+
+## Status polling
+
+Poll `build_status` until the job reaches a terminal state (`succeeded`, `failed`, `cancelled`):
+
+```bash
+unictl command build_status -p job_id=<id> --project /abs/path/to/project
+```
+
+Response fields include `state`, `exit_code`, and `error` (when failed). In CI, poll on a
+fixed interval (e.g. every 5 seconds) rather than tight-looping.
+
+## Headless compile
+
+`unictl compile` runs a Unity script compilation in batchmode and exits with a structured code:
+
+| Exit code | Meaning |
+|-----------|---------|
+| 0 | Compile succeeded |
+| 1 | Compile failed (errors in output) |
+| 3 | Unity not found or lane unavailable |
+| 124 | `--wait` client timeout exceeded |
+
+```bash
+unictl compile --project /abs/path/to/project
+```
+
+## Error recovery
+
+Every error response from `unictl` carries a `hint` field that describes the likely cause and
+next action. Example:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "kind": "target_unsupported",
+    "message": "Build target 'WebGL' requires the WebGL module.",
+    "hint": "Install the WebGL build support module via Unity Hub and retry."
+  }
+}
+```
+
+For the full table of error kinds, exit codes, and hints see
+[error-reference.md](error-reference.md).

@@ -145,17 +145,20 @@ function summarizeDoctorChecks(checks: DoctorCheck[]): { success: boolean; warni
 async function runDoctor(projectPath?: string): Promise<Record<string, unknown>> {
   const cliPackage = getCliPackageMeta();
   const checks: DoctorCheck[] = [];
+  let dominantErrorKind: string | null = null;
 
   let projectRoot: string | null = null;
   try {
     projectRoot = projectPath ? projectPath : findProjectRoot();
     if (!projectRoot) {
       checks.push(createCheck("project_root", false, "error", "Unity project root could not be detected."));
+      dominantErrorKind = "project_not_detected";
     } else {
       checks.push(createCheck("project_root", true, "info", "Unity project root detected.", { project_root: projectRoot }));
     }
   } catch (error) {
     checks.push(createCheck("project_root", false, "error", error instanceof Error ? error.message : String(error)));
+    dominantErrorKind = "project_not_detected";
   }
 
   if (projectRoot) {
@@ -228,6 +231,7 @@ async function runDoctor(projectPath?: string): Promise<Record<string, unknown>>
         transport: status.transport,
         endpoint: status.endpoint,
       }));
+      if (!dominantErrorKind) dominantErrorKind = "ipc_error";
     } else if (status.health != null) {
       checks.push(createCheck("health_probe", true, "info", "Health probe succeeded.", status.health));
     } else {
@@ -236,7 +240,8 @@ async function runDoctor(projectPath?: string): Promise<Record<string, unknown>>
   }
 
   const summary = summarizeDoctorChecks(checks);
-  return {
+  const result: Record<string, unknown> = {
+    ok: summary.success,
     success: summary.success,
     message: summary.success ? "Doctor checks passed." : "Doctor found blocking issues.",
     data: {
@@ -245,6 +250,10 @@ async function runDoctor(projectPath?: string): Promise<Record<string, unknown>>
       checks,
     },
   };
+  if (!summary.success && dominantErrorKind) {
+    result.error = { kind: dominantErrorKind };
+  }
+  return result;
 }
 
 function ensureDependencies(manifest: UnityManifest): Record<string, string> {
@@ -497,19 +506,22 @@ const compileCmd = defineCommand({
         timeout: timeoutSec,
         logFile: args.logFile,
       });
-      output(result);
-      if (!result.success) process.exit(1);
+      if (!result.success) {
+        output({ ok: false, error: { kind: "compile_failed", message: `Compile failed: ${result.errors.length} error(s)` }, ...result });
+        process.exit(1);
+      }
+      output({ ok: true, ...result });
     } catch (e: any) {
       const kind: string | undefined = e.kind;
       if (kind === "editor_running" || kind === "project_locked") {
-        output({ error: e.message, kind });
+        output({ ok: false, error: { kind, message: e.message } });
         process.exit(3);
       }
       if (kind === "timeout") {
-        output({ error: e.message, kind, duration_ms: e.duration_ms, log_file: e.log_file });
+        output({ ok: false, error: { kind: "timeout", message: e.message }, duration_ms: e.duration_ms, log_file: e.log_file });
         process.exit(124);
       }
-      output({ error: e.message });
+      output({ ok: false, error: { kind: kind ?? "ipc_error", message: e.message } });
       process.exit(125);
     }
   },
@@ -586,7 +598,12 @@ const doctorCmd = defineCommand({
     try {
       const result = await runDoctor(args.project);
       output(result);
-      if (!result.success) process.exit(1);
+      if (!result.success) {
+        const kind = (result.error as Record<string, unknown> | undefined)?.kind as string | undefined;
+        if (kind === "project_not_detected") process.exit(2);
+        if (kind === "ipc_error") process.exit(3);
+        process.exit(1);
+      }
     } catch (error) {
       outputErrorAndExit(error);
     }

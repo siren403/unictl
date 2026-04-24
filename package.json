@@ -9,6 +9,8 @@
   "scripts": {
     "release": "bun run ./scripts/release.ts",
     "build:native:macos": "./scripts/build/build-native-macos.sh",
-    "build:native:windows": "powershell -File ./scripts/build/build-native-windows.ps1"
+    "build:native:windows": "powershell -File ./scripts/build/build-native-windows.ps1",
+    "gen:error-ref": "bun run scripts/gen-error-reference.ts",
+    "check:error-registry": "bun run scripts/check-error-registry.ts"
   }
 }

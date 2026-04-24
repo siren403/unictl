@@ -1,218 +1,239 @@
-# unictl 소비자 가이드
+# unictl Consumer Guide
 
-이 문서는 `unictl`을 제품으로 소비하는 Unity 프로젝트 입장에서 필요한 설치와 사용 흐름을 정리한다.
+End-to-end guide for integrating `unictl` into a Unity project.
 
-`unictl` 자체를 개발하는 사람은 [DEVELOPMENT_SETUP.md](development-setup.md)를 본다.
+For contributor / developer setup see [development-setup.md](development-setup.md).
 
-중요:
+---
 
-- 이 문서는 `0.1.x` 목표 UX를 기준으로 정리한 소비자 가이드다.
-- 현재 Queenzle 내부 구현은 dogfooding 프로토타입이므로, 실제 배포 저장소 기준 경로와 명령은 별도 `unictl` 저장소를 기준으로 본다.
+## 1. Prerequisites
 
-## 1. unictl이 제공하는 것
+| Requirement | Notes |
+|-------------|-------|
+| Unity 2022.3 LTS or later | Unity 6000.0+ required for `--build-profile` |
+| Bun runtime | CLI is distributed as a Bun-native TypeScript package |
+| Git | UPM dependency uses a git URL |
+| Windows or macOS | Linux Editor not yet supported |
 
-`unictl`은 Unity Editor를 CLI 기반 인터페이스로 제어하고 확장하는 도구다.
+---
 
-소비자 프로젝트 입장에서는 아래 두 축으로 생각하면 된다.
+## 2. Install the UPM package
 
-1. Unity 프로젝트 안에 들어가는 것
-- UPM 패키지 `com.unictl.editor`
-- built-in `UnictlTool`
-- 플랫폼별 native plugin
-
-2. 작업자 머신에서 실행하는 것
-- `bunx github:OWNER/REPO#vX.Y.Z ...` 형태의 CLI
-
-즉, 프로젝트에는 UPM 패키지가 들어가고, 사람이나 에이전트는 `bunx`로 CLI를 실행한다.
-
-## 2. 0.1.x 전제 조건
-
-- Unity Editor 프로젝트가 있어야 한다.
-- 프로젝트에 Git 기반 UPM dependency를 추가할 수 있어야 한다.
-- 작업자 머신에 Bun이 설치되어 있어야 한다.
-- macOS와 Windows x64를 `0.1.x` 지원 범위로 본다.
-
-## 3. 설치 구조
-
-명칭 규칙:
-
-- 제품 이름은 `unictl`이다.
-- Unity 프로젝트가 설치하는 public UPM package id는 `com.unictl.editor`다.
-- Unity Package Manager에서 보이는 이름은 `Unictl Editor`로 고정한다.
-- 작업자 머신에서 실행하는 CLI 이름은 `unictl`이다.
-
-### 3.1 프로젝트 설치
-
-소비자 프로젝트는 `Packages/manifest.json`에 `com.unictl.editor`를 추가한다.
-
-목표 형태:
+Add `com.unictl.editor` to `Packages/manifest.json` in your Unity project:
 
 ```json
 {
   "dependencies": {
-    "com.unictl.editor": "REPO_GIT_URL.git?path=/packages/upm/com.unictl.editor#vX.Y.Z"
+    "com.unictl.editor": "https://github.com/siren403/unictl.git?path=/packages/upm/com.unictl.editor#v0.3.0"
   }
 }
 ```
 
-원칙:
+Pin to a release tag. Unity resolves the git URL on next editor open and compiles the package automatically — no extra setup needed.
 
-- `com.unictl.editor`는 Unity 프로젝트 안의 editor package이며, 기본 서버와 built-in tool을 제공한다.
-- 프로젝트 고유 명령은 소비자 프로젝트가 자체 `[UnictlTool]` 클래스로 추가한다.
+To update later, change the tag in `manifest.json` and let Unity re-resolve.
 
-### 3.2 CLI 사용
+---
 
-운영 진입점은 아래처럼 tag-pinned `bunx`다.
-
-```bash
-bunx github:OWNER/REPO#vX.Y.Z health --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z list --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor status --project /ABS/PATH/TO/PROJECT
-```
-
-## 4. 기본 사용 흐름
-
-### 4.1 연결 확인
-
-가장 먼저 아래 둘을 본다.
+## 3. Install the CLI
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z health --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z list --project /ABS/PATH/TO/PROJECT
+# One-off (no install):
+bunx unictl@latest --help
+
+# Permanent dev dependency (recommended for agent/CI repos):
+bun add -D unictl
 ```
 
-- `health`는 endpoint와 서버 상태를 확인한다.
-- `list`는 built-in tool과 프로젝트 확장 tool 목록을 확인한다.
+Keep CLI and UPM package versions in sync. `v0.3.0` CLI + `#v0.3.0` UPM tag is the current stable pair.
 
-### 4.2 에디터 프로세스 제어
+---
 
-기본 editor 명령은 아래 네 개다.
+## 4. First run
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z editor open --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor status --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor restart --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z editor quit --project /ABS/PATH/TO/PROJECT
+# Confirm environment: Unity found, UPM package installed, IPC reachable
+unictl doctor --project /abs/path/to/project
+
+# Open the editor (if not already running)
+unictl editor open --project /abs/path/to/project
+
+# List available built-in commands
+unictl command list --project /abs/path/to/project
 ```
 
-기본 원칙:
+`doctor` checks:
+- Unity Editor binary found on PATH / hub
+- `com.unictl.editor` present in `Packages/manifest.json`
+- IPC endpoint reachable (only when editor is running)
 
-- 프로젝트당 editor session은 하나만 지원한다.
-- CLI는 `.unictl/endpoint.json`을 통해 현재 세션을 찾는다.
-- Windows에서는 새 `open` 또는 `restart`마다 새 token이 발급된다.
+---
 
-### 4.3 built-in tool 사용
+## 5. Build flows
 
-`0.1.x` core built-in contract는 아래 네 개다.
-
-- `ping`
-- `editor_control`
-- `capture_ui`
-- `ui_toolkit_input`
-
-대표 예시:
+### 5.1 Default (automatic lane selection)
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z command ping --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z command editor_control -p action=compile --project /ABS/PATH/TO/PROJECT
-echo '{"output_path":".screenshots/capture.png"}' | bunx github:OWNER/REPO#vX.Y.Z command capture_ui --project /ABS/PATH/TO/PROJECT
-echo '{"action":"click","type":"Button","text":"+ Increment"}' | bunx github:OWNER/REPO#vX.Y.Z command ui_toolkit_input --project /ABS/PATH/TO/PROJECT
+unictl command build_project -p target=StandaloneWindows64 --project /abs/path/to/project
 ```
 
-### 4.4 버전, 진단, 설치 보조 명령
+`unictl` selects the lane automatically:
 
-CLI 제품 표면에는 아래 보조 명령도 포함된다.
+| Editor state | Lane used |
+|--------------|-----------|
+| Running | IPC — fast, preserves editor state |
+| Not running | Batchmode — starts Unity headless |
+
+### 5.2 Force a specific lane
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z version
-bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
+# Always use IPC (editor must be running)
+unictl command build_project -p target=StandaloneWindows64 --force-ipc --project /abs/path/to/project
+
+# Always use batchmode (CI, scripted pipelines)
+unictl command build_project -p target=StandaloneWindows64 --batch --project /abs/path/to/project
 ```
 
-원칙:
+### 5.3 BuildProfile (Unity 6+)
 
-- `version`은 CLI와 embedded core package 버전 메타데이터를 보여준다.
-- `doctor`는 설치, manifest, endpoint, editor reachability를 점검한다.
-- `init`은 먼저 `--dryRun`으로 계획을 확인한 뒤 실제 쓰기를 수행하는 흐름을 권장한다.
-- `init`은 `--repoUrl` 없이도 동작한다 — CLI 내장 repository 정보를 자동 사용한다.
-
-## 5. 소비자 프로젝트가 확장하는 방법
-
-`unictl`의 core contract 밖 명령은 소비자 프로젝트 안에서 직접 확장한다.
-
-원칙:
-
-- public extension surface는 `[UnictlTool]`이다.
-- 프로젝트 고유 자동화, 게임 로직 특화 명령, 진단용 실험 명령은 소비자 프로젝트가 소유한다.
-- `0.1.x`에서 core contract에 없는 기능을 강제로 core에 넣지 않는다.
-
-## 6. 권장 운영 루프
-
-1. `health`와 `list`로 연결 상태를 확인한다.
-2. 필요하면 `editor open`으로 에디터를 띄운다.
-3. 에디터 상태 전환은 `editor_control`로 수행한다.
-4. UI 확인은 `capture_ui`와 `ui_toolkit_input`으로 수행한다.
-5. 문제가 있으면 `doctor`로 설치, 버전, endpoint 상태를 점검한다.
-
-## 7. 문제 해결 포인트
-
-### 7.1 `health` 실패
-
-가능한 원인:
-
-- 에디터가 아직 완전히 올라오지 않음
-- stale `.unictl/endpoint.json`
-- 프로젝트 경로 불일치
-- Windows에서는 token mismatch
-
-우선 조치:
+`BuildProfile` assets require batchmode and Unity 6000.0+:
 
 ```bash
-bunx github:OWNER/REPO#vX.Y.Z editor status --project /ABS/PATH/TO/PROJECT
-bunx github:OWNER/REPO#vX.Y.Z doctor --project /ABS/PATH/TO/PROJECT
+unictl command build_project \
+  --build-profile Assets/Settings/Profiles/Release.asset \
+  --batch \
+  --project /abs/path/to/project
 ```
 
-### 7.2 `init` 재실행
+`--build-profile` is incompatible with `--force-ipc`. Batchmode is mandatory because the
+BuildProfile pipeline resolves outside of editor play-state.
 
-`init`은 `com.unictl.editor` 항목만 관리하는 보수적 명령으로 본다.
+---
 
-원칙:
+## 6. Status polling and cancellation
 
-- unrelated dependency는 보존해야 한다.
-- 같은 명령을 두 번 실행해도 결과가 망가지면 안 된다.
-- custom ref를 덮어써야 할 때만 `--force`가 필요하다.
-
-예시:
+`build_project` returns a `job_id`. Poll `build_status` until the job reaches a terminal state:
 
 ```bash
-# 기본: CLI 버전 태그로 UPM 고정 (repo URL 자동)
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --dryRun
-
-# HEAD 모드: 태그 없이 최신 커밋 참조
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --head --dryRun
-
-# 로컬 개발용: 직접 package ref 지정
-bunx github:OWNER/REPO#vX.Y.Z init --project /ABS/PATH/TO/PROJECT --packageRef file:/ABS/PATH/TO/packages/upm/com.unictl.editor --dryRun
+unictl command build_status -p job_id=<id> --project /abs/path/to/project
 ```
 
-## 8. 플랫폼 메모
+Response fields: `state` (`queued` | `running` | `succeeded` | `failed` | `cancelled`),
+`exit_code` (when terminal), `error` (when failed).
 
-- macOS `0.1.x`는 Unix socket + HTTP 기반 연결을 사용한다.
-- Windows `0.1.x`는 Named Pipe + 라인 기반 JSON 프로토콜을 사용한다.
-- pipe 이름은 프로젝트 경로의 SHA256 해시로 결정적 생성된다 (`\\.\pipe\unictl_{hash}`).
-- Linux Editor 지원은 `0.1.x` 범위가 아니다.
+To cancel a queued job before it starts building:
 
-## 9. 에이전트 통합 패키지
+```bash
+unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
+```
 
-`0.1.x`에서는 Codex plugin과 Claude Code support pack을 thin wrapper로 제공한다.
+> Cancellation is cooperative and only effective at the queue stage. A build already running
+> inside `BuildPipeline.BuildPlayer` cannot be interrupted.
 
-원칙:
+---
 
-- 공통 설치/워크플로우 문서는 `docs/standalone/` source에서 생성된다.
-- integration pack은 `doctor`, `editor`, built-in tool workflow만 얇게 감싼다.
-- 프로젝트 고유 규칙이나 자동화는 소비자 저장소가 소유한다.
+## 7. Headless compile
 
-예상 산출물:
+`unictl compile` runs Unity script compilation in batchmode without a full build:
 
-- `codex-plugin-X.Y.Z.zip`
-- `claude-code-support-X.Y.Z.zip`
+```bash
+unictl compile --project /abs/path/to/project
+```
+
+Exit code contract:
+
+| Code | Meaning |
+|------|---------|
+| 0 | Compile succeeded |
+| 1 | Compile failed |
+| 3 | Unity not found or lane unavailable |
+| 124 | `--wait` client timeout |
+
+---
+
+## 8. Error recovery
+
+Every failed response includes a `hint` field:
+
+```json
+{
+  "ok": false,
+  "error": {
+    "kind": "target_unsupported",
+    "message": "Build target 'WebGL' requires the WebGL module.",
+    "hint": "Install the WebGL build support module via Unity Hub and retry."
+  }
+}
+```
+
+Follow the `hint` first. For a full table of error kinds, exit codes, and hints see
+[error-reference.md](error-reference.md).
+
+Common first steps when something goes wrong:
+
+```bash
+unictl doctor --project /abs/path/to/project
+unictl editor status --project /abs/path/to/project
+unictl health --project /abs/path/to/project
+```
+
+---
+
+## 9. CI integration
+
+Recommended batchmode pattern for CI pipelines:
+
+```bash
+# Compile check (fast, no artifact)
+unictl compile --project /abs/path/to/project
+# Exit 0 = clean, 1 = errors, 3 = Unity missing
+
+# Full build
+unictl command build_project \
+  -p target=StandaloneWindows64 \
+  --batch \
+  --project /abs/path/to/project
+
+JOB_ID=$(unictl command build_project ... | jq -r '.job_id')
+
+# Poll until terminal
+while true; do
+  STATUS=$(unictl command build_status -p job_id=$JOB_ID --project /abs/path/to/project | jq -r '.state')
+  [ "$STATUS" = "succeeded" ] && break
+  [ "$STATUS" = "failed" ] && exit 1
+  [ "$STATUS" = "cancelled" ] && exit 1
+  sleep 5
+done
+```
+
+Exit code contract for CI:
+
+| Code | Meaning |
+|------|---------|
+| 0 | Success |
+| 1 | Build/compile failed |
+| 2 | Parameter / validation error |
+| 3 | Lane unavailable (Unity missing, IPC unreachable) |
+| 124 | `--wait` client timeout |
+| 125 | Internal unictl error |
+
+---
+
+## 10. IPC transport
+
+| Platform | Transport | Protocol |
+|----------|-----------|----------|
+| Windows | Named Pipe | Line-delimited JSON |
+| macOS | Unix Socket | Line-delimited JSON |
+
+Endpoint naming is deterministic: SHA256 of the absolute project root path. No endpoint config
+files are required — both CLI and UPM package compute the same name from the same path.
+
+---
+
+## 11. Agent integration packs
+
+Codex and Claude Code integration packs are thin wrappers around these docs and the CLI.
+See `integrations/codex/` and `integrations/claude-code/` in the repo for pack contents.
+
+Project-specific rules and automation live in the consumer repository, not in the integration packs.
