@@ -9,7 +9,7 @@ Core product documentation for `unictl`. Integration packs (Codex, Claude Code) 
 3. [error-reference.md](error-reference.md) — full kind → exit code → hint table
 4. [security-model.md](security-model.md) — trust model for the IPC endpoint
 5. [release-process.md](release-process.md) — release order, dry-run, partial-release recovery
-6. [ROADMAP.md](ROADMAP.md) — post-v0.3.0 direction
+6. [ROADMAP.md](ROADMAP.md) — post-v0.4.0 direction
 7. [development-setup.md](development-setup.md) — contributor bootstrap
 
 ## Archived docs
