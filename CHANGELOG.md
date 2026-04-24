@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+- CI smoke workflow: `bun run unictl -- --help` failed on all 3 OS runners with "Script not found". Added `unictl` script to root `package.json` so the ergonomic pattern works in the standalone repo checkout context (previously only worked inside PickUpCat consumer-monorepo).
+
+---
+
+## [0.4.0] - 2026-04-24
+
 ### Added
 - `unictl capabilities` subcommand: prints offline capabilities JSON for cold-start agent discovery.
 - `packages/cli/src/capabilities.json`: hand-maintained schema (subcommands, builtins, params, exit codes, transports, known limitations).
