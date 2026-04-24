@@ -33,15 +33,15 @@ jobs:
       - name: Run release --dry-run
         run: bun run release "${{ inputs.version }}" --dry-run
 
-      - name: Verify version sync touched 5 files
+      - name: Verify version sync touched 6 files
         run: |
-          changed=$(git status --porcelain | grep -E "(package\.json|plugin\.config\.json|support-pack\.json)$" | wc -l)
-          if [[ "$changed" -ne "5" ]]; then
-            echo "::error::expected 5 version-synced files, got $changed"
+          changed=$(git status --porcelain | grep -E "(package\.json|plugin\.config\.json|support-pack\.json|capabilities\.json)$" | wc -l)
+          if [[ "$changed" -ne "6" ]]; then
+            echo "::error::expected 6 version-synced files, got $changed"
             git status --porcelain
             exit 1
           fi
-          echo "OK: 5 files version-synced as expected"
+          echo "OK: 6 files version-synced as expected"
         shell: bash
 
       - name: Verify assemble artifacts present
@@ -65,5 +65,5 @@ jobs:
       - name: Cleanup (revert version changes)
         if: always()
         run: |
-          git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json 2>/dev/null || true
+          git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json packages/cli/src/capabilities.json 2>/dev/null || true
         shell: bash

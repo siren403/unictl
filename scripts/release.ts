@@ -48,7 +48,12 @@ const VERSIONED_INTEGRATIONS = [
   join(ROOT, "integrations/claude-code/support-pack.json"),
 ];
 
-const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS];
+// CLI source files with version fields that must stay in sync.
+const VERSIONED_CLI = [
+  join(ROOT, "packages/cli/src/capabilities.json"),
+];
+
+const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS, ...VERSIONED_CLI];
 
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
 const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
@@ -73,7 +78,11 @@ function bumpVersion(current: string, type: string): string {
 function updatePackageJsons(version: string): void {
   for (const path of ALL_VERSIONED) {
     const pkg = JSON.parse(readFileSync(path, "utf-8"));
-    pkg.version = version;
+    if ("unictl_version" in pkg) {
+      pkg.unictl_version = version;
+    } else {
+      pkg.version = version;
+    }
     writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
   }
 }

@@ -12,6 +12,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 ## [Unreleased]
 
 ### Added
+- `unictl capabilities` subcommand: prints offline capabilities JSON for cold-start agent discovery.
+- `packages/cli/src/capabilities.json`: hand-maintained schema (subcommands, builtins, params, exit codes, transports, known limitations).
+- CI drift check extended to verify capabilities.json ↔ error-registry.json consistency and version sync with package.json.
 - Unified release driver: `scripts/release.ts` now invokes `scripts/release/assemble.ts` as a post-version-sync step, building Codex/Claude integration artifacts and checksums.
 - `--dry-run` flag for `bun run release`: runs version sync + assemble + validation without pushing, tagging, or publishing.
 - Idempotency guard in release script: exits early if `package.json` is already at the target version and a release commit for it already exists.

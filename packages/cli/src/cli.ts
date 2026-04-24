@@ -1,6 +1,7 @@
 #!/usr/bin/env bun
 import { defineCommand, runMain } from "citty";
 import { readFileSync } from "fs";
+import caps from "./capabilities.json" assert { type: "json" };
 import { command, health } from "./client";
 import { buildCmd } from "./build";
 import { runCompile } from "./compile";
@@ -586,6 +587,17 @@ const versionCmd = defineCommand({
   },
 });
 
+const capabilitiesCmd = defineCommand({
+  meta: { name: "capabilities", description: "Print offline capabilities JSON for cold-start agent discovery (no live editor required)" },
+  run: async () => {
+    try {
+      console.log(JSON.stringify(caps, null, 2));
+    } catch (error) {
+      outputErrorAndExit(error);
+    }
+  },
+});
+
 const doctorCmd = defineCommand({
   meta: { name: "doctor", description: "Run installation and endpoint diagnostics" },
   args: {
@@ -683,6 +695,7 @@ QUICK START (run in order):
   },
   subCommands: {
     build: buildCmd,
+    capabilities: capabilitiesCmd,
     compile: compileCmd,
     command: commandCmd,
     doctor: doctorCmd,

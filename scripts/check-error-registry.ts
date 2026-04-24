@@ -2,6 +2,8 @@
 /**
  * CI drift check: validates that error-registry.json, CLI errorExit() calls,
  * C# BuildError() calls, and HintTable.cs are all consistent.
+ * Also validates capabilities.json ↔ error-registry.json consistency and
+ * version sync between capabilities.json and package.json.
  *
  * Exit 0 = all consistent. Exit 1 = drift detected (details printed to stderr).
  */
@@ -183,7 +185,50 @@ for (const kind of registeredKinds) {
 }
 
 // ---------------------------------------------------------------------------
-// 7. Report
+// 7. Capabilities drift check
+// ---------------------------------------------------------------------------
+
+interface CapabilitiesBuiltin {
+  name: string;
+  emits_error_kinds: string[];
+}
+
+interface CapabilitiesJson {
+  schema_version: number;
+  unictl_version: string;
+  builtins: CapabilitiesBuiltin[];
+}
+
+const capabilitiesPath = join(repoRoot, "packages", "cli", "src", "capabilities.json");
+const capabilities: CapabilitiesJson = JSON.parse(readFileSync(capabilitiesPath, "utf-8"));
+
+// Assert: every emits_error_kinds entry in capabilities.json exists in error-registry.json
+const capsMissingFromRegistry: string[] = [];
+for (const builtin of capabilities.builtins) {
+  for (const kind of builtin.emits_error_kinds) {
+    if (!registeredKinds.has(kind)) {
+      capsMissingFromRegistry.push(`capabilities.json builtin "${builtin.name}": kind="${kind}" not found in error-registry.json`);
+    }
+  }
+}
+
+for (const msg of capsMissingFromRegistry) {
+  failures.push(`CAPABILITIES DRIFT: ${msg}`);
+}
+
+// Assert: capabilities.json unictl_version matches root package.json version
+const rootPkg = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf-8"));
+const rootVersion: string = rootPkg.version;
+if (capabilities.unictl_version !== rootVersion) {
+  failures.push(
+    `CAPABILITIES VERSION DRIFT: capabilities.json unictl_version="${capabilities.unictl_version}" does not match package.json version="${rootVersion}"`
+  );
+}
+
+const capsKindCount = capabilities.builtins.reduce((acc, b) => acc + b.emits_error_kinds.length, 0);
+
+// ---------------------------------------------------------------------------
+// 8. Report
 // ---------------------------------------------------------------------------
 
 console.log(`Registry kinds:   ${registeredKinds.size}`);
@@ -191,6 +236,7 @@ console.log(`CLI kinds:        ${cliKinds.size} (${[...cliKinds].join(", ")})`);
 console.log(`C# kinds:         ${allCsKinds.size} (${[...allCsKinds].join(", ")})`);
 console.log(`HintTable keys:   ${hintTableKinds.size} (${[...hintTableKinds].join(", ")})`);
 console.log(`All emitted:      ${allEmittedKinds.size}`);
+console.log(`Capabilities:     ${capabilities.builtins.length} builtin(s), ${capsKindCount} emits_error_kinds ref(s), unictl_version=${capabilities.unictl_version}`);
 
 if (failures.length > 0) {
   console.error(`\nDrift check FAILED (${failures.length} issue(s)):`);
@@ -200,5 +246,6 @@ if (failures.length > 0) {
   process.exit(1);
 } else {
   console.log("\nDrift check PASSED: registry, HintTable, and code are consistent.");
+  console.log("Capabilities drift check PASSED: capabilities.json kinds and version are consistent.");
   process.exit(0);
 }

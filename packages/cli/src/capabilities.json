@@ -1,0 +1,208 @@
+{
+  "schema_version": 1,
+  "unictl_version": "0.3.0",
+  "subcommands": [
+    {
+      "name": "build",
+      "description": "Build a Unity player (auto-routes between live editor via IPC and headless batchmode).",
+      "key_flags": [
+        "--target",
+        "--output",
+        "--build-profile",
+        "--batch",
+        "--wait"
+      ],
+      "help": "unictl build --help"
+    },
+    {
+      "name": "compile",
+      "description": "Headless batchmode compile + .meta generation.",
+      "key_flags": [
+        "--project",
+        "--timeout"
+      ],
+      "help": "unictl compile --help"
+    },
+    {
+      "name": "command",
+      "description": "Invoke a builtin tool exposed by the Unity Editor via IPC.",
+      "key_flags": [
+        "-p",
+        "@file"
+      ],
+      "help": "unictl command list (requires live editor)"
+    },
+    {
+      "name": "doctor",
+      "description": "Environment diagnostics. Returns typed error.kind on failure.",
+      "key_flags": [
+        "--project"
+      ],
+      "help": "unictl doctor --help"
+    },
+    {
+      "name": "editor",
+      "description": "Unity editor lifecycle (status | open | quit | restart).",
+      "key_flags": [
+        "--project"
+      ],
+      "help": "unictl editor --help"
+    },
+    {
+      "name": "health",
+      "description": "Lightweight IPC ping against the live editor.",
+      "key_flags": [
+        "--project"
+      ],
+      "help": "unictl health --help"
+    },
+    {
+      "name": "init",
+      "description": "Scaffold a consumer project's package.json + UPM reference.",
+      "key_flags": [
+        "--project",
+        "--repo-url"
+      ],
+      "help": "unictl init --help"
+    },
+    {
+      "name": "version",
+      "description": "Print unictl CLI version.",
+      "key_flags": [],
+      "help": "unictl version"
+    },
+    {
+      "name": "capabilities",
+      "description": "Print offline capabilities JSON (this document).",
+      "key_flags": [],
+      "help": "unictl capabilities"
+    }
+  ],
+  "builtins": [
+    {
+      "name": "build_project",
+      "description": "Build a Unity player; dual-lane auto-routing.",
+      "parameters": [
+        "target",
+        "build_path",
+        "scenes",
+        "define_symbols",
+        "build_profile",
+        "options",
+        "env",
+        "timeout_sec",
+        "log_level",
+        "job_id"
+      ],
+      "companions": [
+        "build_status",
+        "build_cancel"
+      ],
+      "emits_error_kinds": [
+        "invalid_param",
+        "target_unsupported",
+        "editor_busy",
+        "project_locked",
+        "multi_instance",
+        "editor_running",
+        "profile_switch_requires_batch",
+        "profile_unsupported_on_this_unity",
+        "profile_not_applied"
+      ],
+      "unity_version": "2022.3+ (BuildProfile requires 6000.0+)"
+    },
+    {
+      "name": "build_status",
+      "description": "Read progress file for a given job_id.",
+      "parameters": [
+        "job_id"
+      ],
+      "companions": [
+        "build_project",
+        "build_cancel"
+      ],
+      "emits_error_kinds": [
+        "job_not_found",
+        "progress_read_failed",
+        "invalid_param"
+      ],
+      "unity_version": "2022.3+"
+    },
+    {
+      "name": "build_cancel",
+      "description": "Cooperative queue-stage cancellation.",
+      "parameters": [
+        "job_id"
+      ],
+      "companions": [
+        "build_project",
+        "build_status"
+      ],
+      "emits_error_kinds": [
+        "invalid_param",
+        "not_cancellable",
+        "cancelled_by_user"
+      ],
+      "unity_version": "2022.3+"
+    }
+  ],
+  "exit_codes": [
+    {
+      "code": 0,
+      "meaning": "success"
+    },
+    {
+      "code": 1,
+      "meaning": "build failed / operation failed"
+    },
+    {
+      "code": 2,
+      "meaning": "param / validation error"
+    },
+    {
+      "code": 3,
+      "meaning": "lane unavailable / dependency missing"
+    },
+    {
+      "code": 124,
+      "meaning": "--wait client timeout (build continues)"
+    },
+    {
+      "code": 125,
+      "meaning": "unictl internal error"
+    }
+  ],
+  "transports": [
+    {
+      "platform": "windows",
+      "transport": "named_pipe",
+      "path_pattern": "\\\\\\\\.\\\\pipe\\\\unictl-<sha256_hash>"
+    },
+    {
+      "platform": "darwin",
+      "transport": "unix_socket",
+      "path_pattern": "/tmp/unictl-<sha256_hash>.sock"
+    },
+    {
+      "platform": "linux",
+      "transport": "unix_socket",
+      "path_pattern": "/tmp/unictl-<sha256_hash>.sock"
+    }
+  ],
+  "known_limitations": [
+    "Third-party EditorApplication.Exit hooks can kill IPC-lane builds; use --batch to avoid.",
+    "Target / scripting-define switches need manual editor restart or --batch with -buildTarget.",
+    "build_cancel is cooperative at queue stage only; BuildPipeline.BuildPlayer has no interrupt API.",
+    "Non-terminal progress files are not auto-recovered; clear Library/unictl-builds/ and re-run.",
+    "Avoid running two unictl-initiated batch Unity instances on the same project."
+  ],
+  "references": {
+    "changelog": "CHANGELOG.md",
+    "migration": "MIGRATION.md",
+    "deprecation": "DEPRECATION.md",
+    "error_reference": "docs/standalone/error-reference.md",
+    "security_model": "docs/standalone/security-model.md",
+    "consumer_guide": "docs/standalone/consumer-guide.md",
+    "workflows": "docs/standalone/WORKFLOWS.md"
+  }
+}
