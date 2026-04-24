@@ -17,3 +17,4 @@
 5. 필요 시 `command capture_ui`, `command ui_toolkit_input`로 검증 루프를 수행
 
 상세 워크플로우는 [WORKFLOWS.md](WORKFLOWS.md)를 본다.
+후속 로드맵은 [ROADMAP.md](ROADMAP.md)를 본다.
