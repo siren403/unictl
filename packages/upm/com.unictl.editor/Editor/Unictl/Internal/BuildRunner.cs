@@ -227,6 +227,23 @@ namespace Unictl.Internal
                 if (Application.isBatchMode && !string.IsNullOrEmpty(p.BuildProfile))
                     Debug.Log($"[unictl] using active profile: {p.BuildProfile}");
 
+                // M3: post-spawn profile verification — confirm Unity actually applied -activeBuildProfile
+                if (Application.isBatchMode && !string.IsNullOrEmpty(p.BuildProfile) && BuildProfileAdapter.Supported)
+                {
+                    var activePath = BuildProfileAdapter.GetActiveProfilePath();
+                    var requestedNorm = p.BuildProfile.Replace('\\', '/').ToLowerInvariant();
+                    var activeNorm = activePath?.Replace('\\', '/').ToLowerInvariant();
+                    if (activeNorm != requestedNorm)
+                    {
+                        WriteProgress(jobId, State.Failed, p, null, null,
+                            new ErrorInfo("profile_not_applied",
+                                $"Requested profile '{p.BuildProfile}' but active profile is '{activePath ?? "<none>"}'"));
+                        _activeJobId = null;
+                        EditorApplication.Exit(3);
+                        return;
+                    }
+                }
+
                 var opts = BuildBuildPlayerOptions(p);
                 var report = BuildPipeline.BuildPlayer(opts);
                 var summary = report.summary;

@@ -1,5 +1,5 @@
 import { defineCommand } from "citty";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, realpathSync, writeFileSync } from "fs";
 import { join, isAbsolute, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
 import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary } from "./process";
@@ -121,11 +121,11 @@ QUICK START:
   unictl build --target StandaloneWindows64 --build-profile Assets/Settings/Profiles/Windows.asset --batch
 
 LANE ROUTING:
-  editor running + low hook_risk    → IPC lane (fast path)
-  editor running + hook_risk=high   → Batchmode (unless --force-ipc)
-  editor not running                → Batchmode lane
-  multiple editors                  → fail-fast (multi_instance)
-  stale UnityLockfile               → preflight error (project_locked)
+  editor running     → IPC lane (--force-ipc accepted; known-limitation: third-party
+                       EditorApplication.Exit hooks kill the editor; use --batch to avoid)
+  editor not running → Batchmode lane
+  multiple editors   → fail-fast (multi_instance)
+  stale UnityLockfile → preflight error (project_locked)
 
 BUILD PROFILE (Unity 6+ only):
   --build-profile requires --batch (or editor not running).
@@ -151,7 +151,7 @@ EXIT CODES:
     wait: { type: "boolean", default: true, description: "Block until terminal state (default: on)" },
     timeout: { type: "string", default: "0", description: "Client wait timeout in seconds (0 = unlimited)" },
     batch: { type: "boolean", default: false, description: "Force batchmode lane (errors if editor running)" },
-    forceIpc: { type: "boolean", default: false, description: "Override hook_risk=high auto-fallback" },
+    forceIpc: { type: "boolean", default: false, description: "Force IPC lane even when editor is flagged (see lane routing notes)" },
     jobId: { type: "string", description: "Override auto-generated job_id" },
     project: { type: "string", description: "Unity project path (auto-detected if omitted)" },
   },
@@ -184,21 +184,37 @@ EXIT CODES:
       }
       // 경로 traversal 방지 — 프로젝트 루트 외부 경로 거부
       const absPath = resolve(projectRoot, relPath);
-      const normalizedRoot = resolve(projectRoot);
-      if (absPath !== normalizedRoot && !absPath.startsWith(normalizedRoot + "\\") && !absPath.startsWith(normalizedRoot + "/")) {
-        errorExit(
-          2,
-          "profile_invalid_path",
-          `--build-profile must resolve inside the project root: "${absPath}"`,
-          "BuildProfile path must resolve inside the project root."
-        );
-      }
       if (!existsSync(absPath)) {
         errorExit(
           2,
           "profile_not_found",
           `BuildProfile asset not found: "${absPath}" (resolved from "${raw}")`,
           "BuildProfile asset not found at the given path. Verify path relative to project root."
+        );
+      }
+      // Canonicalize via realpath to defeat junction/symlink/reparse-point escapes
+      let realAbsPath: string;
+      let realProjectRoot: string;
+      try {
+        realAbsPath = realpathSync.native(absPath);
+        realProjectRoot = realpathSync.native(projectRoot);
+      } catch (err) {
+        errorExit(
+          2,
+          "profile_invalid_path",
+          `--build-profile path could not be canonicalized: "${absPath}" (${(err as Error).message})`,
+          "BuildProfile path could not be resolved. Verify path exists and is accessible."
+        );
+      }
+      // Normalize separators for comparison
+      const realAbsNorm = realAbsPath.replace(/\\/g, "/");
+      const realRootNorm = realProjectRoot.replace(/\\/g, "/");
+      if (realAbsNorm !== realRootNorm && !realAbsNorm.toLowerCase().startsWith(realRootNorm.toLowerCase() + "/")) {
+        errorExit(
+          2,
+          "profile_invalid_path",
+          `--build-profile resolves outside the project root after canonicalization: "${realAbsPath}"`,
+          "BuildProfile path must resolve inside the project root. Symlinks and junctions are not permitted to escape."
         );
       }
       resolvedBuildProfile = relPath;
@@ -335,6 +351,21 @@ EXIT CODES:
       "-batchmode",
       "-projectPath", projectRoot,
     ];
+    // M4: verify Unity version supports BuildProfile (requires 6000.0+) before passing -activeBuildProfile
+    if (resolvedBuildProfile) {
+      const ver = unityVersion;
+      if (ver) {
+        const major = parseInt(ver.split(".")[0], 10);
+        if (!isNaN(major) && major < 6000) {
+          errorExit(
+            2,
+            "profile_unsupported_on_this_unity",
+            `Unity version '${ver}' does not support BuildProfile (requires 6000.0+).`,
+            "BuildProfile requires Unity 6000.0+. Remove --build-profile or upgrade editor."
+          );
+        }
+      }
+    }
     // -activeBuildProfile must be placed before -executeMethod so Unity applies
     // the profile during project load, before scripts run (Unity 6+ only).
     if (resolvedBuildProfile) {

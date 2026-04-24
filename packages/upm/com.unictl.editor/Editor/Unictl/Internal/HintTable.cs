@@ -26,6 +26,9 @@ namespace Unictl.Internal
             { "profile_invalid_extension", "BuildProfile path must end with .asset. Pass an asset path, not a directory or label." },
             { "profile_invalid_path",   "BuildProfile path must resolve inside the project root." },
             { "profile_unsupported_on_this_unity", "BuildProfile requires Unity 6000.0+. Remove --build-profile or upgrade editor." },
+            { "profile_not_applied",    "BuildProfile CLI flag was not applied. Check Unity console for profile load errors; verify the asset is valid and path is correct." },
+            { "job_not_found",          "No progress file for that job_id. Verify the id returned by build_project, or the job may have been pruned (retention policy keeps last 10)." },
+            { "progress_read_failed",   "Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;

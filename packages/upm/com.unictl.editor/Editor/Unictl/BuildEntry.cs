@@ -50,8 +50,36 @@ namespace Unictl.Editor
 
             // ScheduleBuild → OneShot으로 다음 틱에 빌드 실행 → Exit(code)
             var result = BuildRunner.ScheduleBuild(p, p.JobId);
+
+            // B1: preflight failure — ok=false → log + exit immediately (no OneShot queued)
+            if (result["ok"]?.ToObject<bool>() == false)
+            {
+                var errorObj = result["error"] as JObject;
+                var kind = errorObj?["kind"]?.ToString() ?? "unknown";
+                var exitCode = MapKindToExit(kind);
+                Debug.LogError($"[unictl] preflight failed: {errorObj}");
+                EditorApplication.Exit(exitCode);
+                return;
+            }
+
             Debug.Log($"[unictl] BuildEntry scheduled: {result}");
             // 이 메서드는 즉시 return — Unity editor loop이 계속 돌면서 OneShot 발화 후 Exit
+        }
+
+        static int MapKindToExit(string kind)
+        {
+            switch (kind)
+            {
+                case "invalid_param":
+                case "target_unsupported":
+                case "profile_unsupported_on_this_unity":
+                case "profile_invalid_extension":
+                case "profile_invalid_path":
+                case "profile_not_found":
+                    return 2;
+                default:
+                    return 3;
+            }
         }
     }
 }

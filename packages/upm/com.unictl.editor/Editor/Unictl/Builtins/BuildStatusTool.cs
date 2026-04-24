@@ -53,11 +53,11 @@ namespace Unictl.Builtins
             if (!File.Exists(progressPath))
             {
                 return new ErrorResponse(
-                    $"job not found: {jobId}",
+                    $"No progress file for job: {jobId}",
                     new
                     {
-                        kind = "invalid_param",
-                        hint = HintTable.Get("invalid_param"),
+                        kind = "job_not_found",
+                        hint = HintTable.Get("job_not_found"),
                         job_id = jobId,
                         expected_path = progressPath,
                     });
@@ -85,8 +85,8 @@ namespace Unictl.Builtins
                 $"Failed to read progress file for job {jobId} after {maxAttempts} attempts: {lastEx?.Message}",
                 new
                 {
-                    kind = "invalid_param",
-                    hint = HintTable.Get("invalid_param"),
+                    kind = "progress_read_failed",
+                    hint = HintTable.Get("progress_read_failed"),
                     job_id = jobId,
                     path = progressPath,
                 });
