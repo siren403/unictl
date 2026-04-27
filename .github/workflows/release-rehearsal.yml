@@ -74,10 +74,10 @@ jobs:
             ls -laR "$dir"
             exit 1
           fi
-          # Count non-staging files; expect at least: upm.tgz + codex.zip + claude.zip + manifest + SHA256SUMS = 5
+          # Count non-staging files; expect: upm.tgz + codex.zip + claude.zip + manifest + SHA256SUMS = 5 minimum
           file_count=$(find "$dir" -maxdepth 1 -type f | wc -l)
-          if [[ "$file_count" -lt "2" ]]; then
-            echo "::error::expected at least 2 artifacts in $dir, got $file_count"
+          if [[ "$file_count" -lt "5" ]]; then
+            echo "::error::expected at least 5 artifacts in $dir (upm.tgz + 2 zips + manifest + SHA256SUMS), got $file_count"
             ls -laR "$dir"
             exit 1
           fi

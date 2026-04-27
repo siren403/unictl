@@ -31,6 +31,8 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - `--build-profile` UNC path explicit rejection: `\\server\share\Foo.asset` now returns `profile_invalid_path` (exit 2) instead of being silently normalized to forward slashes and passed to Unity batchmode (where behavior was undefined).
 - `getUnityPid` case-insensitive `-projectpath` matching: Unity Hub launches with lowercase `-projectpath`, our matcher used camelCase `-projectPath`. `editor status` / preflight checks falsely returned "not running" when Unity was actually open. Now matches both case variants and case-insensitively for the path argument too (Windows is case-insensitive for filesystem paths).
 - `compile` output no longer self-contradicts when Unity exits non-zero with empty errors: object-spread ordering bug caused `result.ok=true` (set when exitCode != -1) to override the explicit `ok: false` we tried to set. Fixed by spreading first then overriding. Message also clarified: empty-errors case now reads `"Unity batchmode exited with code N (no compile errors detected; check log_file for cause)"` instead of misleading `"Compile failed: 0 error(s)"`.
+- `compile` and `editor` (status/quit/open/restart) error responses now include the `hint_command` field (Codex review response). Previously these emitted `output({ ok: false, error: { kind, message } })` directly, bypassing `errorExit()` and dropping the field. The CHANGELOG claim "every error response carries hint_command" is now accurate.
+- `release-rehearsal.yml` artifact threshold tightened from `>= 2` to `>= 5` to match comment intent (upm.tgz + 2 zips + manifest + SHA256SUMS = 5 minimum).
 
 ---
 

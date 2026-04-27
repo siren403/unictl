@@ -4,6 +4,7 @@ import { readFileSync } from "fs";
 import caps from "./capabilities.json" assert { type: "json" };
 import { command, health } from "./client";
 import { formatHelpJson } from "./help-json";
+import { lookupHintCommand } from "./error";
 import { buildCmd } from "./build";
 import { runCompile } from "./compile";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
@@ -401,7 +402,8 @@ const editorStatusCmd = defineCommand({
     try {
       output(await editorStatus({ project: args.project }));
     } catch (e: any) {
-      output({ error: e.message });
+      const kind = e.kind ?? "ipc_error";
+      output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
       process.exit(1);
     }
   },
@@ -424,7 +426,8 @@ const editorQuitCmd = defineCommand({
     try {
       output(await editorQuit({ project: args.project, force: args.force }));
     } catch (e: any) {
-      output({ error: e.message });
+      const kind = e.kind ?? "ipc_error";
+      output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
       process.exit(1);
     }
   },
@@ -447,7 +450,8 @@ const editorOpenCmd = defineCommand({
     try {
       output(await editorOpen({ project: args.project, skipPrecompile: args.skipPrecompile }));
     } catch (e: any) {
-      output({ error: e.message });
+      const kind = e.kind ?? "ipc_error";
+      output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
       process.exit(1);
     }
   },
@@ -465,7 +469,8 @@ const editorRestartCmd = defineCommand({
     try {
       output(await editorRestart({ project: args.project }));
     } catch (e: any) {
-      output({ error: e.message });
+      const kind = e.kind ?? "ipc_error";
+      output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
       process.exit(1);
     }
   },
@@ -514,21 +519,31 @@ const compileCmd = defineCommand({
         const message = result.errors.length > 0
           ? `Compile failed with ${result.errors.length} error(s)`
           : `Unity batchmode exited with code ${result.exit_code} (no compile errors detected; check log_file for cause)`;
-        output({ ...result, ok: false, error: { kind: "compile_failed", message } });
+        output({
+          ...result,
+          ok: false,
+          error: { kind: "compile_failed", message, hint_command: lookupHintCommand("compile_failed") },
+        });
         process.exit(1);
       }
       output({ ok: true, ...result });
     } catch (e: any) {
       const kind: string | undefined = e.kind;
       if (kind === "editor_running" || kind === "project_locked") {
-        output({ ok: false, error: { kind, message: e.message } });
+        output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
         process.exit(3);
       }
       if (kind === "timeout") {
-        output({ ok: false, error: { kind: "timeout", message: e.message }, duration_ms: e.duration_ms, log_file: e.log_file });
+        output({
+          ok: false,
+          error: { kind: "timeout", message: e.message, hint_command: lookupHintCommand("timeout") },
+          duration_ms: e.duration_ms,
+          log_file: e.log_file,
+        });
         process.exit(124);
       }
-      output({ ok: false, error: { kind: kind ?? "ipc_error", message: e.message } });
+      const fallbackKind = kind ?? "ipc_error";
+      output({ ok: false, error: { kind: fallbackKind, message: e.message, hint_command: lookupHintCommand(fallbackKind) } });
       process.exit(125);
     }
   },
