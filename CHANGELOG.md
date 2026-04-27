@@ -11,9 +11,26 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+- `--json` flag on `unictl --help` and every subcommand `--help` emits machine-readable JSON instead of human-formatted text. Cold-start agents can introspect subcommand list, flags, and exit codes without parsing terminal output.
+- `hint_command` field in error responses: every `errorExit(...)` now appends the registered `hint_command` template from `error-registry.json` (e.g., `"unictl command build_status -p job_id=<YOUR_JOB_ID>"`). Agents can convert error → next-action programmatically.
+- `packages/cli/src/error.ts` (new): centralized error helper that looks up `hint_command` from the registry and emits the unified error JSON shape.
+- `packages/cli/src/help-json.ts` (new): structured help formatter sourced from `capabilities.json`.
+
+### Changed
+- `BuildProfileAdapter.IsValidProfileAsset` no longer guards with `File.Exists` (was fragile in batchmode where cwd may differ from project root). Relies entirely on `AssetDatabase.LoadAssetAtPath<BuildProfile>` which is project-root-relative by definition.
+- CI smoke workflow runs `check:error-registry` on all 3 OS (was Linux-only) — catches CRLF / encoding / path drift on Windows and macOS.
+- Release rehearsal workflow hardened:
+  - Content-level assertion on `.tmp/phase-e-release/` (artifacts present, not just directory exists).
+  - File-count assertion data-driven from `release.ts` `VERSIONED_*` arrays (was hardcoded `-ne 6`).
+  - Cleanup step removes silent `|| true`; asserts clean tree post-cleanup or fails the job.
+
 ### Fixed
 - CI smoke workflow: `bun run unictl -- --help` failed on all 3 OS runners with "Script not found". Added `unictl` script to root `package.json` so the ergonomic pattern works in the standalone repo checkout context (previously only worked inside PickUpCat consumer-monorepo).
 - Windows process discovery on modern runners (Windows Server 2022, Windows 11 recent): `listUnityProcessesWindows` propagated a `wmic` ENOENT exception when `Get-CimInstance` returned empty stdout (zero Unity processes). Two fixes: (1) CIM empty-stdout is now treated as "zero processes" instead of "CIM failed + fallthrough to wmic", (2) wmic fallback itself is wrapped in try/catch returning `[]` on ENOENT. `doctor`/`editor status`/`health` no longer crash on Unity-absent Windows runners.
+- `--build-profile` UNC path explicit rejection: `\\server\share\Foo.asset` now returns `profile_invalid_path` (exit 2) instead of being silently normalized to forward slashes and passed to Unity batchmode (where behavior was undefined).
+- `getUnityPid` case-insensitive `-projectpath` matching: Unity Hub launches with lowercase `-projectpath`, our matcher used camelCase `-projectPath`. `editor status` / preflight checks falsely returned "not running" when Unity was actually open. Now matches both case variants and case-insensitively for the path argument too (Windows is case-insensitive for filesystem paths).
+- `compile` output no longer self-contradicts when Unity exits non-zero with empty errors: object-spread ordering bug caused `result.ok=true` (set when exitCode != -1) to override the explicit `ok: false` we tried to set. Fixed by spreading first then overriding. Message also clarified: empty-errors case now reads `"Unity batchmode exited with code N (no compile errors detected; check log_file for cause)"` instead of misleading `"Compile failed: 0 error(s)"`.
 
 ---
 

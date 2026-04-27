@@ -180,10 +180,14 @@ export async function getUnityPid(projectPath?: string): Promise<number | null> 
 
   // Normalize path separators for cross-platform matching
   const normalizedRoot = projectRoot.replace(/\\/g, "/");
+  // Unity launches via Hub use lowercase `-projectpath`; some other launch paths use camelCase
+  // `-projectPath`. Match case-insensitively for both flag name and project path (Windows is
+  // case-insensitive for filesystem paths).
+  const normalizedRootLower = normalizedRoot.toLowerCase();
   const matchingProject = processes.filter((proc) => {
-    const normalizedCmd = proc.command.replace(/\\/g, "/");
-    return normalizedCmd.includes(`-projectPath ${normalizedRoot}`)
-      || normalizedCmd.includes(`-projectPath "${normalizedRoot}"`);
+    const cmdLower = proc.command.replace(/\\/g, "/").toLowerCase();
+    return cmdLower.includes(`-projectpath ${normalizedRootLower}`)
+      || cmdLower.includes(`-projectpath "${normalizedRootLower}"`);
   });
 
   const preferred = matchingProject.find((proc) => !isBatchModeWorker(proc.command));

@@ -29,7 +29,6 @@ jobs:
       - name: Error registry drift check
         run: bun run check:error-registry
         shell: bash
-        if: runner.os == 'Linux'
 
       - name: unictl --help
         run: bun run unictl -- --help

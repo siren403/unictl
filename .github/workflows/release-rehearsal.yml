@@ -33,15 +33,26 @@ jobs:
       - name: Run release --dry-run
         run: bun run release "${{ inputs.version }}" --dry-run
 
-      - name: Verify version sync touched 6 files
+      - name: Determine expected version-synced file count
+        id: expected
         run: |
+          # Count join(ROOT, entries in the three VERSIONED_* arrays in release.ts.
+          # Each indented join(ROOT, line is exactly one versioned file path.
+          count=$(grep -E '^\s+join\(ROOT,' scripts/release.ts | wc -l | tr -d ' ')
+          echo "count=$count" >> "$GITHUB_OUTPUT"
+          echo "Expected version-synced files: $count"
+        shell: bash
+
+      - name: Verify version sync touched expected files
+        run: |
+          expected="${{ steps.expected.outputs.count }}"
           changed=$(git status --porcelain | grep -E "(package\.json|plugin\.config\.json|support-pack\.json|capabilities\.json)$" | wc -l)
-          if [[ "$changed" -ne "6" ]]; then
-            echo "::error::expected 6 version-synced files, got $changed"
+          if [[ "$changed" -ne "$expected" ]]; then
+            echo "::error::expected $expected version-synced files, got $changed"
             git status --porcelain
             exit 1
           fi
-          echo "OK: 6 files version-synced as expected"
+          echo "OK: $changed files version-synced as expected"
         shell: bash
 
       - name: Verify assemble artifacts present
@@ -51,6 +62,26 @@ jobs:
             exit 1
           fi
           ls -la .tmp/phase-e-release/
+        shell: bash
+
+      - name: Verify assemble produced expected artifacts
+        run: |
+          dir=.tmp/phase-e-release
+          # assemble.ts produces: *.tgz (UPM), *.zip x2 (codex + claude packs),
+          # release-manifest.json, SHA256SUMS — at minimum 5 files.
+          if [[ ! -f "$dir/SHA256SUMS" ]] && [[ -z "$(find $dir -maxdepth 1 -name '*.tgz' -o -name '*.zip' 2>/dev/null)" ]]; then
+            echo "::error::assemble.ts produced empty or malformed output in $dir"
+            ls -laR "$dir"
+            exit 1
+          fi
+          # Count non-staging files; expect at least: upm.tgz + codex.zip + claude.zip + manifest + SHA256SUMS = 5
+          file_count=$(find "$dir" -maxdepth 1 -type f | wc -l)
+          if [[ "$file_count" -lt "2" ]]; then
+            echo "::error::expected at least 2 artifacts in $dir, got $file_count"
+            ls -laR "$dir"
+            exit 1
+          fi
+          echo "OK: $file_count artifact(s) produced"
         shell: bash
 
       - name: Verify NO git tag created
@@ -65,5 +96,13 @@ jobs:
       - name: Cleanup (revert version changes)
         if: always()
         run: |
-          git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json packages/cli/src/capabilities.json 2>/dev/null || true
+          set -e
+          git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json packages/cli/src/capabilities.json
+          # Verify clean tree post-cleanup
+          if [[ -n "$(git status --porcelain)" ]]; then
+            echo "::error::cleanup left dirty tree"
+            git status
+            exit 1
+          fi
+          echo "OK: working tree clean post-cleanup"
         shell: bash

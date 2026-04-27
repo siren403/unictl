@@ -3,6 +3,7 @@ import { defineCommand, runMain } from "citty";
 import { readFileSync } from "fs";
 import caps from "./capabilities.json" assert { type: "json" };
 import { command, health } from "./client";
+import { formatHelpJson } from "./help-json";
 import { buildCmd } from "./build";
 import { runCompile } from "./compile";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
@@ -508,7 +509,12 @@ const compileCmd = defineCommand({
         logFile: args.logFile,
       });
       if (!result.success) {
-        output({ ok: false, error: { kind: "compile_failed", message: `Compile failed: ${result.errors.length} error(s)` }, ...result });
+        // Spread first so explicit ok/error fields below override result.ok / result.error.
+        // Without ordering, result.ok=true (set on line 128 when exitCode!=-1) silently wins.
+        const message = result.errors.length > 0
+          ? `Compile failed with ${result.errors.length} error(s)`
+          : `Unity batchmode exited with code ${result.exit_code} (no compile errors detected; check log_file for cause)`;
+        output({ ...result, ok: false, error: { kind: "compile_failed", message } });
         process.exit(1);
       }
       output({ ok: true, ...result });
@@ -706,4 +712,47 @@ QUICK START (run in order):
   },
 });
 
-runMain(main, { rawArgs: normalizeKnownFlags(process.argv.slice(2)) });
+// ---------------------------------------------------------------------------
+// --help --json intercept (must run before citty processes --help)
+// ---------------------------------------------------------------------------
+
+const rawArgv = process.argv.slice(2);
+const hasHelp = rawArgv.includes("--help") || rawArgv.includes("-h");
+const hasJson = rawArgv.includes("--json");
+
+if (hasHelp && hasJson) {
+  // Determine subcommand: first non-flag positional arg (if any)
+  const knownSubcommands = new Set(Object.keys(main.subCommands ?? {}));
+  let cmdName: string | undefined;
+  for (const arg of rawArgv) {
+    if (!arg.startsWith("-") && knownSubcommands.has(arg)) {
+      cmdName = arg;
+      break;
+    }
+  }
+
+  // Provide citty args definition for the subcommand when available
+  const subCmdArgsDef: Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }> | undefined =
+    cmdName === "build"
+      ? buildCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "compile"
+      ? compileCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "command"
+      ? commandCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "doctor"
+      ? doctorCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "init"
+      ? initCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "health"
+      ? healthCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : cmdName === "version"
+      ? {}
+      : cmdName === "capabilities"
+      ? {}
+      : undefined;
+
+  console.log(JSON.stringify(formatHelpJson(cmdName, subCmdArgsDef), null, 2));
+  process.exit(0);
+}
+
+runMain(main, { rawArgs: normalizeKnownFlags(rawArgv) });

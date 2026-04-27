@@ -4,6 +4,7 @@ import { join, isAbsolute, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
 import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary, getUnityLockfilePath } from "./process";
 import { command } from "./client";
+import { errorExit } from "./error";
 
 // ---------------------------------------------------------------------------
 // Library/unictl-builds helpers
@@ -25,11 +26,6 @@ export function ensureBuildsDir(projectRoot: string): void {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-function errorExit(code: number, kind: string, message: string, hint?: string): never {
-  process.stderr.write(JSON.stringify({ ok: false, error: { kind, message, hint: hint ?? "" } }) + "\n");
-  process.exit(code);
 }
 
 // ---------------------------------------------------------------------------
@@ -167,6 +163,16 @@ EXIT CODES:
     let resolvedBuildProfile: string | undefined;
     if (args.buildProfile) {
       const raw = args.buildProfile as string;
+      // Reject UNC paths explicitly. Unity batchmode behavior on `\\server\share\...` is undefined
+      // after CLI normalizes backslashes to forward slashes.
+      if (raw.startsWith("\\\\") || raw.startsWith("//")) {
+        errorExit(
+          2,
+          "profile_invalid_path",
+          `--build-profile UNC paths are not supported: "${raw}"`,
+          "BuildProfile path must be a local filesystem path inside the project root, not a UNC share."
+        );
+      }
       if (!raw.endsWith(".asset")) {
         errorExit(
           2,

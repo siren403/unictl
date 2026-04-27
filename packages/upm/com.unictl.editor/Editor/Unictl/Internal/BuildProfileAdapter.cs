@@ -47,7 +47,6 @@ namespace Unictl.Internal
         {
 #if UNITY_6000_0_OR_NEWER
             if (string.IsNullOrEmpty(assetPath)) return false;
-            if (!File.Exists(assetPath)) return false;
             if (!assetPath.EndsWith(".asset")) return false;
             var loaded = AssetDatabase.LoadAssetAtPath<BuildProfile>(assetPath);
             return loaded != null;
