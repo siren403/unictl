@@ -105,16 +105,25 @@ export async function runTest(opts: {
   const unityArgs: string[] = [
     unityBin,
     "-batchmode",
-    "-nographics",
     "-projectPath", projectRoot,
-    "-runTests",
-    "-testPlatform", platform,
-    "-testResults", resolvedResults,
+    "-executeMethod", "Unictl.BatchTestRunner.RunFromCommandLine",
+    "-unictlTestResults", resolvedResults,
+    "-unictlTestPlatform", platform,
     "-logFile", logFile,
+    "-quit",
   ];
 
+  // EditMode: -nographics is safe; PlayMode requires rendering so omit it
+  if (platform === "editmode") {
+    unityArgs.splice(2, 0, "-nographics");
+  }
+
   if (filter) {
-    unityArgs.push("-testFilter", filter);
+    if (filter.startsWith("assembly:")) {
+      unityArgs.push("-unictlTestAssembly", filter.slice("assembly:".length));
+    } else {
+      unityArgs.push("-unictlTestFilter", filter);
+    }
   }
 
   const startTime = Date.now();
