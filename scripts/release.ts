@@ -15,7 +15,7 @@
  *
  * Safe release order (eliminates orphan-tag risk):
  *   1. Bump version in all package.json + integration metadata files
- *   2. Validate CHANGELOG.md has populated [Unreleased] section
+ *   2. Validate CHANGELOG.md + promote [Unreleased] → [v<ver>] + update ROADMAP.md header
  *   3. git add + commit "release: v<ver>"  (local only)
  *   4. npm publish packages/cli  (skip if --no-publish or --dry-run)
  *   5. git push origin main      (skip if --dry-run)
@@ -57,6 +57,7 @@ const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS, ...VERS
 
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
 const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
+const ROADMAP_PATH   = join(ROOT, "docs/standalone/ROADMAP.md");
 
 function readVersion(): string {
   const pkg = JSON.parse(readFileSync(VERSIONED_PACKAGES[0], "utf-8"));
@@ -117,6 +118,30 @@ function validateChangelog(version: string): void {
     console.error(`  Add at least one bullet under Added/Changed/Fixed/etc. before releasing.\n`);
     process.exit(1);
   }
+}
+
+function promoteChangelog(version: string): void {
+  const content = readFileSync(CHANGELOG_PATH, "utf-8");
+  const date = new Date().toISOString().slice(0, 10);
+  const promoted = content.replace(
+    "## [Unreleased]\n",
+    `## [Unreleased]\n\n---\n\n## [${version}] - ${date}\n`
+  );
+  if (promoted === content) {
+    console.error("\n  ERROR: '## [Unreleased]' header not found in CHANGELOG.md.\n");
+    process.exit(1);
+  }
+  writeFileSync(CHANGELOG_PATH, promoted);
+}
+
+function updateRoadmapHeader(version: string): void {
+  if (!existsSync(ROADMAP_PATH)) return;
+  const content = readFileSync(ROADMAP_PATH, "utf-8");
+  const updated = content.replace(
+    /## 현재 릴리즈 — `v\d+\.\d+\.\d+`/,
+    `## 현재 릴리즈 — \`v${version}\``
+  );
+  writeFileSync(ROADMAP_PATH, updated);
 }
 
 function checkIdempotency(version: string): boolean {
@@ -210,9 +235,12 @@ if (checkIdempotency(next)) {
 console.log("  Step 1: version sync");
 updatePackageJsons(next);
 
-// Step 2: validate CHANGELOG.md
+// Step 2: validate + promote CHANGELOG, update ROADMAP header
 console.log("  Step 2: validate CHANGELOG.md");
 validateChangelog(next);
+console.log("  Step 2b: promote [Unreleased] → [" + next + "] + update ROADMAP header");
+promoteChangelog(next);
+updateRoadmapHeader(next);
 
 // Post-version-sync: run assemble.ts to build integration artifacts + checksums
 console.log("  Step 3: assemble integration artifacts");
@@ -226,7 +254,9 @@ if (isDryRun) {
 
 // Step 3: local commit
 console.log("  Step 4: git commit (local)");
-run(["git", "add", ...ALL_VERSIONED]);
+const filesToAdd = [...ALL_VERSIONED, CHANGELOG_PATH];
+if (existsSync(ROADMAP_PATH)) filesToAdd.push(ROADMAP_PATH);
+run(["git", "add", ...filesToAdd]);
 run(["git", "commit", "-m", `release: v${next}`]);
 
 if (!skipPublish) {
