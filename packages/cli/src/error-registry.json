@@ -208,6 +208,70 @@
       "hint_text": "this capability is scaffolded in P1; wire-up lands with later phases",
       "hint_command": null,
       "since_version": "0.1.0"
+    },
+    {
+      "kind": "editor_lane_unavailable",
+      "emitted_from": ["cli", "test"],
+      "exit_code": 2,
+      "hint_text": "Editor lane is not yet available. Use --batch to run tests in headless batchmode.",
+      "hint_command": "unictl test --batch --platform <editmode|playmode> --results <output.xml>",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "tests_failed",
+      "emitted_from": ["test"],
+      "exit_code": 1,
+      "hint_text": "One or more tests failed. Check the results XML for details.",
+      "hint_command": "unictl test --batch --platform <platform> --results <output.xml>",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "no_assemblies",
+      "emitted_from": ["test"],
+      "exit_code": 3,
+      "hint_text": "No tests found. Verify that test assemblies are configured for the target platform.",
+      "hint_command": "unictl test --batch --platform editmode --results out.xml",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "xml_parse_failed",
+      "emitted_from": ["test"],
+      "exit_code": 4,
+      "hint_text": "Test results XML missing or unparseable. Check the Unity log for errors.",
+      "hint_command": "unictl test --batch --platform editmode --results out.xml",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "unity_crash",
+      "emitted_from": ["test"],
+      "exit_code": 5,
+      "hint_text": "Unity crashed or exited abnormally during test run. Run doctor to verify installation.",
+      "hint_command": "unictl doctor -p <project>",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "test_timeout",
+      "emitted_from": ["test"],
+      "exit_code": 6,
+      "hint_text": "Test run exceeded the wall-clock timeout. Increase --timeout or reduce test scope.",
+      "hint_command": "unictl test --batch --platform <platform> --timeout 600 --results out.xml",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "test_invalid_filter",
+      "emitted_from": ["test"],
+      "exit_code": 7,
+      "hint_text": "Unity rejected the test filter expression. Check assembly name, namespace, or method spelling.",
+      "hint_command": "unictl test --batch --platform editmode --filter <assembly:AssemblyName> --results out.xml",
+      "since_version": "0.5.0"
+    },
+    {
+      "kind": "unknown_test_failure",
+      "emitted_from": ["test"],
+      "exit_code": 8,
+      "hint_text": "Tests completed but Unity exited non-zero. Check the Unity log for unexpected errors.",
+      "hint_command": "unictl test --batch --platform editmode --results out.xml",
+      "since_version": "0.5.0"
     }
   ]
 }

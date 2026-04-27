@@ -76,6 +76,33 @@
       "description": "Print offline capabilities JSON (this document).",
       "key_flags": [],
       "help": "unictl capabilities"
+    },
+    {
+      "name": "test",
+      "description": "Run Unity tests in batchmode (--batch required; editor lane planned for v0.6.0).",
+      "key_flags": [
+        "--batch",
+        "--platform",
+        "--results",
+        "--filter",
+        "--timeout"
+      ],
+      "help": "unictl test --help",
+      "exit_codes": [
+        { "code": 0, "kind": "success" },
+        { "code": 1, "kind": "tests_failed" },
+        { "code": 2, "kind": "editor_lane_unavailable" },
+        { "code": 3, "kind": "no_assemblies" },
+        { "code": 4, "kind": "xml_parse_failed" },
+        { "code": 5, "kind": "unity_crash" },
+        { "code": 6, "kind": "test_timeout" },
+        { "code": 7, "kind": "test_invalid_filter" },
+        { "code": 8, "kind": "unknown_test_failure" }
+      ],
+      "notes": [
+        "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
+        "Editor lane (without --batch) is planned for v0.6.0."
+      ]
     }
   ],
   "builtins": [

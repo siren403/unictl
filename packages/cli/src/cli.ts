@@ -7,6 +7,7 @@ import { formatHelpJson } from "./help-json";
 import { lookupHintCommand } from "./error";
 import { buildCmd } from "./build";
 import { runCompile } from "./compile";
+import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
@@ -723,6 +724,7 @@ QUICK START (run in order):
     editor: editorCmd,
     health: healthCmd,
     init: initCmd,
+    test: testCmd,
     version: versionCmd,
   },
 });
@@ -764,6 +766,8 @@ if (hasHelp && hasJson) {
       ? {}
       : cmdName === "capabilities"
       ? {}
+      : cmdName === "test"
+      ? testCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
       : undefined;
 
   console.log(JSON.stringify(formatHelpJson(cmdName, subCmdArgsDef), null, 2));
