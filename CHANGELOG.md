@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.5.0] - 2026-04-27
+
 ### Added
 - `--json` flag on `unictl --help` and every subcommand `--help` emits machine-readable JSON instead of human-formatted text. Cold-start agents can introspect subcommand list, flags, and exit codes without parsing terminal output.
 - `hint_command` field in error responses: every `errorExit(...)` now appends the registered `hint_command` template from `error-registry.json` (e.g., `"unictl command build_status -p job_id=<YOUR_JOB_ID>"`). Agents can convert error → next-action programmatically.
