@@ -28,6 +28,8 @@ namespace Unictl.Internal
             { "profile_not_applied",    "BuildProfile CLI flag was not applied. Check Unity console for profile load errors; verify the asset is valid and path is correct." },
             { "job_not_found",          "No progress file for that job_id. Verify the id returned by build_project, or the job may have been pruned (retention policy keeps last 10)." },
             { "progress_read_failed",   "Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds." },
+            { "test_timeout",           "Test run exceeded the wall-clock timeout. Increase --timeout or reduce test scope." },
+            { "xml_save_failed",        "Test results XML could not be saved. Check that --results path is writable." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;
