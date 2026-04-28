@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.6.0] - 2026-04-28
+
 ### Added
 - `unictl test` editor lane: 에디터 실행 중 시 IPC를 통해 `TestRunnerApi.Execute`로 테스트 실행 (`--batch` 없이 호출). batchmode 대비 새 Unity 프로세스 띄우는 비용 없음.
 - `test_run` UnictlTool: editor lane IPC 핸들러. 즉시 `queued` 응답 후 비동기 실행, progress file로 결과 전달.
