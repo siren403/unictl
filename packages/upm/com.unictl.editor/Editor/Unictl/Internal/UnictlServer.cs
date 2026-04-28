@@ -24,6 +24,7 @@ namespace Unictl
         internal static volatile bool RunInBackground;
         internal static string UnityVersion = "unknown";
         internal static string Platform = "unknown";
+        internal static string SessionId = Guid.NewGuid().ToString();
 
         static UnictlServer()
         {

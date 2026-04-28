@@ -1,4 +1,4 @@
-import { existsSync, rmSync } from "fs";
+import { existsSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import {
   endpointSeemsPresent,

@@ -272,6 +272,94 @@
       "hint_text": "Tests completed but Unity exited non-zero. Check the Unity log for unexpected errors.",
       "hint_command": "unictl test --batch --platform editmode --results out.xml",
       "since_version": "0.5.0"
+    },
+    {
+      "kind": "editor_busy_playing",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Editor is in Play mode. Stop Play mode before running tests.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_busy_compiling",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Editor is compiling scripts. Wait for compilation to finish.",
+      "hint_command": "unictl editor status",
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_busy_updating",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Editor is importing assets. Wait for asset database refresh to finish.",
+      "hint_command": "unictl editor status",
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_dirty_scene",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "One or more open scenes have unsaved changes. Save or pass --allow-unsaved-scenes.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_dirty_prefab_stage",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Prefab stage has unsaved changes. Exit or save the prefab stage before running tests.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_reload_active",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "PlayMode tests with full domain reload are not supported in editor lane. Use --batch or enable DisableDomainReload in Enter Play Mode settings.",
+      "hint_command": "unictl test --batch --platform playmode --results <output.xml>",
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "results_path_unwritable",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Cannot write to the specified results path. Check directory permissions or specify a writable path.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "test_already_running",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 2,
+      "hint_text": "Another test job is already running in the editor. Wait for it to complete before starting a new run.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_died",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 8,
+      "hint_text": "Editor process exited unexpectedly during test run. Check Unity crash logs.",
+      "hint_command": "unictl doctor",
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "editor_session_changed",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 8,
+      "hint_text": "Editor was restarted mid-run. The test job is no longer valid. Re-run the test.",
+      "hint_command": null,
+      "since_version": "0.6.0"
+    },
+    {
+      "kind": "test_heartbeat_stale",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 8,
+      "hint_text": "No progress update received for 5 seconds. Editor may be deadlocked or heavily throttled.",
+      "hint_command": "unictl doctor",
+      "since_version": "0.6.0"
     }
   ]
 }
