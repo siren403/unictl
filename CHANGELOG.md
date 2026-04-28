@@ -13,6 +13,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ---
 
+## [0.6.1] - 2026-04-28
+
+---
+
 ## [0.6.0] - 2026-04-28
 
 ### Added

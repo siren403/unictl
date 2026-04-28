@@ -1,6 +1,6 @@
 {
   "name": "unictl",
-  "version": "0.6.0",
+  "version": "0.6.1",
   "description": "Use unictl to connect Codex with Unity editor install, doctor, and lifecycle workflows.",
   "author": {
     "name": "unictl"
