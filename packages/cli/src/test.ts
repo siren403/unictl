@@ -523,6 +523,15 @@ EXIT CODES:
 
     // Lane routing
     if (args.batch) {
+      const editorRunning = await detectEditorRunning(projectRoot);
+      if (editorRunning) {
+        errorExit(
+          3,
+          "editor_running",
+          "Editor is already running. Quit it first or omit --batch to use editor lane.",
+          "unictl editor quit"
+        );
+      }
       const result = await runTest({
         projectRoot,
         platform: platform!,
@@ -535,15 +544,19 @@ EXIT CODES:
       process.exit(0);
     }
 
-    // Editor lane: check editor is running first
+    // Editor lane: auto-fallback to batchmode if editor is not running
     const editorRunning = await detectEditorRunning(projectRoot);
     if (!editorRunning) {
-      errorExit(
-        2,
-        "editor_not_running",
-        "Editor is not running. Use --batch for headless test, or open the editor first.",
-        `unictl test --batch --platform ${platform} --results ${resultsFile}`
-      );
+      const result = await runTest({
+        projectRoot,
+        platform: platform!,
+        resultsFile: resultsFile!,
+        filter: args.filter,
+        timeoutSec: timeoutSec && timeoutSec > 0 ? timeoutSec : undefined,
+        unityVersion: args.editorVersion,
+      });
+      process.stdout.write(JSON.stringify(result) + "\n");
+      process.exit(0);
     }
 
     const result = await runEditorLane({
