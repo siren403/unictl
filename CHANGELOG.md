@@ -11,6 +11,21 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+- `unictl test` editor lane: 에디터 실행 중 시 IPC를 통해 `TestRunnerApi.Execute`로 테스트 실행 (`--batch` 없이 호출). batchmode 대비 새 Unity 프로세스 띄우는 비용 없음.
+- `test_run` UnictlTool: editor lane IPC 핸들러. 즉시 `queued` 응답 후 비동기 실행, progress file로 결과 전달.
+- `--allow-unsaved-scenes` 플래그: PlayMode dirty scene 우회.
+- `--allow-reload-active` 플래그: PlayMode + Full Reload 강제 시도 (위험).
+- 11종 에러 kind: `editor_busy_playing`, `editor_busy_compiling`, `editor_busy_updating`, `editor_dirty_scene`, `editor_dirty_prefab_stage`, `editor_reload_active`, `results_path_unwritable`, `test_already_running`, `editor_died`, `editor_session_changed`, `test_heartbeat_stale`.
+- `UnictlServer.SessionId`: editor 세션 식별 (UUID v4).
+
+### Changed
+- `unictl test`: 기본 동작 변경. 이전에는 `--batch`가 필수였으나, 이제 에디터 실행 감지 시 자동으로 editor lane 사용. 에디터 미실행 시 `editor_not_running` 에러로 batchmode 안내.
+- `editor.ts`: 누락된 `readFileSync` import 추가 (failure path에서 발생하는 `ReferenceError` 수정).
+
+### Fixed
+- (해당 없음, 신규 기능 위주)
+
 ---
 
 ## [0.5.0] - 2026-04-27

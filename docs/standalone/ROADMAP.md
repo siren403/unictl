@@ -2,7 +2,7 @@
 
 `v0.5.0` 시점 기준 후속 로드맵. 확정된 방향과 아이디어 수준을 분리한다.
 
-## 현재 릴리즈 — `v0.5.0`
+## 현재 릴리즈 — `v0.6.0`
 
 배포 완료 항목 (전체 목록은 [CHANGELOG.md](../../CHANGELOG.md)):
 
@@ -89,25 +89,39 @@
 
 ---
 
-## v0.6.0 — Minor (Lane parity)
+## v0.6.0 — Test Runner Editor Lane ✅ 배포 완료
 
-plan v4.3에서 의도적으로 제거된 기능을 선택적으로 재도입. 모두 opt-in.
+`unictl test` 실행 시 에디터가 실행 중이면 IPC로 `TestRunnerApi`를 호출 (editor lane).
+batchmode 대비 새 Unity 프로세스 띄우는 비용 없음.
 
-- **P2a.2 2-phase Prepare/Resume — target / scripting-define 스위치**
-  - 현재 v4.3 제약: target 또는 define 변경 시 에디터 재시작 또는 `--batch` 필요 (IPC 레인은 domain reload 횡단 불가).
-  - 후보: `[InitializeOnLoad]` 마커 파일 + `EditorApplication.wantsToQuit` 가드 + `File.Replace` 아토믹 진행 파일 — v4.1 시절 설계 부활, 단 v4.3이 증명한 단순 원칙 유지.
-  - 범위가 커서 단일 마이너 릴리즈 하나에 집중.
+### 출시 항목
+- editor lane (EditMode + PlayMode with DisableDomainReload)
+- progress file 기반 비동기 결과 수신 (`Library/unictl-tests/<job-id>.json`)
+- Preflight 8종 + 단일 활성 job 강제 (`test_already_running`)
+- Domain reload 횡단 미지원 (PlayMode + Full Reload 거부: `editor_reload_active`)
+- 11종 신규 에러 kind (editor_busy_*, editor_dirty_*, editor_died, editor_session_changed, test_heartbeat_stale)
+- `UnictlServer.SessionId` (UUID v4) — 에디터 세션 교체 감지
+- `--allow-unsaved-scenes`, `--allow-reload-active` 플래그
 
-- **Strict-mode hook audit (opt-in `--strict-hooks`)**
-  - Third-party `IPostprocessBuildWithReport`가 `EditorApplication.Exit` 호출하는지 TypeCache + `Mono.Cecil` IL 스캔.
-  - 기본은 off (Known Limitation 1 수용). CI 엄격성 요구 사용자만 활성화.
-  - Mono.Cecil 의존성 추가 필요 → UPM 패키지 크기 증가 트레이드오프 검토.
+### 검증
+- PoC-1, 2, 5a, 5b, 8 통과
+- `Assets/Editor/UnictlPoc/` + `Assets/Tests/UnictlPoc(PlayMode)/`
+- v2 설계 + Codex 외부 리뷰 2회 (Conditional → Conditional)
 
 ---
 
 ## v0.7.0+ — 미래 후보 (아이디어 단계)
 
 확정 전이며 우선순위 미지정. 실제 수요 발생 시 승격.
+
+- **P2a.2 2-phase Prepare/Resume — target / scripting-define 스위치**
+  - 현재 v4.3 제약: target 또는 define 변경 시 에디터 재시작 또는 `--batch` 필요 (IPC 레인은 domain reload 횡단 불가).
+  - 후보: `[InitializeOnLoad]` 마커 파일 + `EditorApplication.wantsToQuit` 가드 + `File.Replace` 아토믹 진행 파일 — v4.1 시절 설계 부활, 단 v4.3이 증명한 단순 원칙 유지.
+
+- **Strict-mode hook audit (opt-in `--strict-hooks`)**
+  - Third-party `IPostprocessBuildWithReport`가 `EditorApplication.Exit` 호출하는지 TypeCache + `Mono.Cecil` IL 스캔.
+  - 기본은 off (Known Limitation 1 수용). CI 엄격성 요구 사용자만 활성화.
+  - Mono.Cecil 의존성 추가 필요 → UPM 패키지 크기 증가 트레이드오프 검토.
 
 - **Docs maturity**: 영문/한국어 통합 인덱스, localized user guide, consolidated reference index.
 - **Multi-project concurrent builds 지원**: UnityLockfile 원천 차단 완화 (per-project lock 전략 재검토).

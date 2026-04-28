@@ -79,33 +79,188 @@
     },
     {
       "name": "test",
-      "description": "Run Unity tests in batchmode (--batch required; editor lane planned for v0.6.0).",
+      "description": "Run Unity tests. Auto-routes to editor lane (IPC) when editor is running; falls back to batchmode with --batch. Without --batch and editor not running, returns editor_not_running error.",
       "key_flags": [
         "--batch",
         "--platform",
         "--results",
         "--filter",
-        "--timeout"
+        "--timeout",
+        "--allow-unsaved-scenes",
+        "--allow-reload-active"
       ],
       "help": "unictl test --help",
       "exit_codes": [
-        { "code": 0, "kind": "success" },
-        { "code": 1, "kind": "tests_failed" },
-        { "code": 2, "kind": "editor_lane_unavailable" },
-        { "code": 3, "kind": "no_assemblies" },
-        { "code": 4, "kind": "xml_parse_failed" },
-        { "code": 5, "kind": "unity_crash" },
-        { "code": 6, "kind": "test_timeout" },
-        { "code": 7, "kind": "test_invalid_filter" },
-        { "code": 8, "kind": "unknown_test_failure" }
+        {
+          "code": 0,
+          "kind": "success"
+        },
+        {
+          "code": 1,
+          "kind": "tests_failed"
+        },
+        {
+          "code": 2,
+          "kind": "editor_lane_unavailable"
+        },
+        {
+          "code": 3,
+          "kind": "no_assemblies"
+        },
+        {
+          "code": 4,
+          "kind": "xml_parse_failed"
+        },
+        {
+          "code": 5,
+          "kind": "unity_crash"
+        },
+        {
+          "code": 6,
+          "kind": "test_timeout"
+        },
+        {
+          "code": 7,
+          "kind": "test_invalid_filter"
+        },
+        {
+          "code": 8,
+          "kind": "unknown_test_failure"
+        },
+        {
+          "code": 9,
+          "kind": "editor_not_running"
+        },
+        {
+          "code": 10,
+          "kind": "editor_busy_compiling"
+        },
+        {
+          "code": 11,
+          "kind": "editor_busy_updating"
+        },
+        {
+          "code": 12,
+          "kind": "editor_busy_playing"
+        },
+        {
+          "code": 13,
+          "kind": "editor_dirty_scene"
+        },
+        {
+          "code": 14,
+          "kind": "editor_dirty_prefab_stage"
+        },
+        {
+          "code": 15,
+          "kind": "editor_reload_active"
+        },
+        {
+          "code": 16,
+          "kind": "results_path_unwritable"
+        },
+        {
+          "code": 17,
+          "kind": "test_already_running"
+        },
+        {
+          "code": 18,
+          "kind": "editor_died"
+        },
+        {
+          "code": 19,
+          "kind": "editor_session_changed"
+        },
+        {
+          "code": 20,
+          "kind": "test_heartbeat_stale"
+        }
       ],
       "notes": [
         "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
-        "Editor lane (without --batch) is planned for v0.6.0."
+        "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via test_run tool. Poll Library/unictl-tests/<job-id>.json for progress.",
+        "Batchmode lane: --batch required or editor not running → headless Unity process."
       ]
     }
   ],
   "builtins": [
+    {
+      "name": "test_run",
+      "description": "Run Unity tests via TestRunnerApi (editor lane). Returns {ok,job_id,state:'queued'} immediately. Poll Library/unictl-tests/<job-id>.json for progress.",
+      "parameters": [
+        "platform",
+        "assembly",
+        "test_filter",
+        "results_path",
+        "job_id",
+        "timeout_deadline_ms",
+        "allow_unsaved_scenes",
+        "allow_reload_active"
+      ],
+      "required_parameters": [
+        "platform",
+        "results_path",
+        "job_id"
+      ],
+      "parameter_details": {
+        "platform": {
+          "type": "enum",
+          "values": [
+            "editmode",
+            "playmode"
+          ]
+        },
+        "assembly": {
+          "type": "string",
+          "description": "Assembly filter (optional)"
+        },
+        "test_filter": {
+          "type": "string",
+          "description": "Unity -testFilter expression (optional)"
+        },
+        "results_path": {
+          "type": "string",
+          "description": "Absolute path for NUnit XML output"
+        },
+        "job_id": {
+          "type": "string",
+          "description": "Caller-assigned UUID for progress file naming"
+        },
+        "timeout_deadline_ms": {
+          "type": "number",
+          "description": "Optional wall-clock deadline in ms"
+        },
+        "allow_unsaved_scenes": {
+          "type": "boolean",
+          "description": "Bypass dirty-scene preflight for PlayMode"
+        },
+        "allow_reload_active": {
+          "type": "boolean",
+          "description": "Force PlayMode + Full Reload (dangerous; may hang)"
+        }
+      },
+      "response_fields": [
+        "ok",
+        "job_id",
+        "state",
+        "progress_file",
+        "editor_session_id",
+        "editor_pid"
+      ],
+      "emits_error_kinds": [
+        "invalid_param",
+        "editor_busy_compiling",
+        "editor_busy_updating",
+        "editor_busy_playing",
+        "editor_dirty_scene",
+        "editor_dirty_prefab_stage",
+        "editor_reload_active",
+        "results_path_unwritable",
+        "test_already_running"
+      ],
+      "emitted_from": "editor_lane",
+      "unity_version": "2022.3+"
+    },
     {
       "name": "build_project",
       "description": "Build a Unity player; dual-lane auto-routing.",

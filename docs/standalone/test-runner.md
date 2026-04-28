@@ -1,8 +1,8 @@
 # unictl test — Test Runner Reference
 
-Run Unity tests in headless batchmode without opening the editor.
+Run Unity tests via the editor lane (IPC, v0.6.0+) or headless batchmode (`--batch`).
 
-> **Editor lane status**: The `--batch` flag is currently required. Editor lane (interactive, live-editor IPC) is planned for **v0.6.0**.
+> **v0.6.0+**: `--batch` is no longer required when the editor is running. See [Editor Lane (v0.6.0+)](#editor-lane-v060) below.
 
 ---
 
@@ -22,13 +22,15 @@ unictl test --batch \
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--batch` | **Yes** | Run in headless batchmode. Omitting this flag exits with `editor_lane_unavailable` (exit 2). |
+| `--batch` | No (batchmode) | Force headless batchmode. Without this flag, unictl auto-routes to editor lane if the editor is running; returns `editor_not_running` (exit 9) if not. |
 | `--platform` | **Yes** | Test platform: `editmode` or `playmode`. |
 | `--results` | **Yes** | Output path for the NUnit XML results file. Parent directory is created automatically. |
 | `--filter` | No | Unity `-testFilter` expression. See filter syntax below. |
 | `--timeout` | No | Wall-clock timeout in seconds. `0` or omitted = unlimited. Unity is killed and `test_timeout` is returned when exceeded. |
 | `--editor-version` | No | Override the Unity editor version to use. Default: read from `ProjectSettings/ProjectVersion.txt`. |
 | `--project` | No | Unity project root path. Auto-detected from current directory if omitted. |
+| `--allow-unsaved-scenes` | No | (Editor lane only) Bypass dirty-scene preflight for PlayMode. |
+| `--allow-reload-active` | No | (Editor lane only) Force PlayMode + Full Reload. Dangerous — may hang indefinitely. |
 
 ---
 
@@ -162,7 +164,72 @@ Unity batch output is written to `Library/unictl-tests/test-<timestamp>.log` ins
 
 ## Known Limitations
 
-- `--batch` is required. The editor lane (running tests via IPC against a live editor) is planned for **v0.6.0**.
+### Batchmode (`--batch`)
+
 - Play Mode tests require a valid player build configuration; failures during player build emit `unity_crash` or `unknown_test_failure`.
-- `unictl test` does not start the Unity editor; it is purely headless. Do not have the editor open on the same project when running tests.
+- Do not have the editor open on the same project when running batchmode tests.
 - NUnit XML parsing uses attribute extraction from the `<test-run>` element; nested test detail is not surfaced in the JSON output (read the XML directly for per-test breakdown).
+
+### Editor Lane
+
+See [Known Limitations (Editor Lane)](#known-limitations-editor-lane) below.
+
+---
+
+## Editor Lane (v0.6.0+)
+
+When the Unity editor is running on the target project, `unictl test` automatically uses the editor lane — no `--batch` flag needed.
+
+```
+unictl test --platform <editmode|playmode> --results <path>
+```
+
+If the editor is not running, unictl returns `editor_not_running` (exit 9) and suggests using `--batch`.
+
+### How It Works
+
+1. CLI sends `test_run` IPC call to the live editor → editor responds immediately with `{ok: true, job_id, state: "queued"}`.
+2. CLI polls `Library/unictl-tests/<job-id>.json` for progress (250 ms initial, up to 2 s backoff).
+3. Heartbeat staleness is detected at 5 s; if the editor PID dies or the session ID changes, the CLI exits with the appropriate error kind.
+
+### New Flags
+
+| Flag | Description |
+|------|-------------|
+| `--allow-unsaved-scenes` | PlayMode + dirty scene: bypass the `editor_dirty_scene` preflight rejection. |
+| `--allow-reload-active` | PlayMode + Full Reload (Domain Reload ON): force the attempt. Dangerous — may hang indefinitely. |
+
+### Preflight Rejections (PlayMode)
+
+The editor evaluates these conditions before accepting a `test_run` job. Any rejection returns immediately with no test started.
+
+| Error Kind | Condition |
+|------------|-----------|
+| `editor_busy_compiling` | Editor is compiling scripts. |
+| `editor_busy_updating` | Editor is refreshing the AssetDatabase. |
+| `editor_busy_playing` | Editor is already in PlayMode. |
+| `editor_dirty_scene` | Open scene has unsaved changes (use `--allow-unsaved-scenes` to bypass). |
+| `editor_dirty_prefab_stage` | Prefab stage is open with unsaved changes. |
+| `editor_reload_active` | Domain Reload is enabled (`Reload Domain` = ON). Use `--allow-reload-active` to force, or switch to `DisableDomainReload`. |
+| `results_path_unwritable` | The specified `--results` path is not writable. |
+| `test_already_running` | A `test_run` job is already active in this editor session. |
+
+### Lane Comparison
+
+| Item | Batchmode (`--batch`) | Editor Lane (default) |
+|------|-----------------------|----------------------|
+| Startup cost | Slow (new Unity process) | Fast (IPC, no new process) |
+| PlayMode + Full Reload | Supported | Rejected (`editor_reload_active`) |
+| Affects user's editor session | No | Yes (PlayMode entry disrupts editing) |
+| CI environments | Recommended | Not recommended |
+| Requires running editor | No | Yes |
+
+### Known Limitations (Editor Lane)
+
+1. **PlayMode + Full Reload not supported.** `Reload Domain` = ON causes Unity to reload all assemblies during PlayMode entry, which interrupts the IPC connection. Switch to `DisableDomainReload` or use `--batch`.
+2. **PlayMode batchmode triggers a player build** (10+ minutes). Editor lane is the only fast path for PlayMode.
+3. **No concurrent test/build lock.** Running `unictl build` and `unictl test` (editor lane) simultaneously may corrupt editor state.
+4. **Multi-project concurrency not supported.** A single editor session handles one `test_run` job at a time.
+5. **`reload_during_run` is not a distinct exit.** Mid-run domain reloads surface as `test_heartbeat_stale` or `editor_session_changed` depending on timing.
+6. **`--allow-reload-active=true` is advisory only.** unictl marks the attempt as user-acknowledged but cannot prevent a hang.
+7. **Run In Background caveat.** When the editor's `Run In Background` preference is off, the editor update tick slows to near-zero when the window is unfocused, causing apparent heartbeat stalls that are not real crashes.
