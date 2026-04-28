@@ -22,7 +22,7 @@ unictl test --batch \
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--batch` | No (batchmode) | Force headless batchmode. Without this flag, unictl auto-routes to editor lane if the editor is running; returns `editor_not_running` (exit 9) if not. |
+| `--batch` | No (batchmode) | Force headless batchmode. Without this flag, unictl auto-routes to editor lane if the editor is running; returns `editor_not_running` (exit 3) if not. |
 | `--platform` | **Yes** | Test platform: `editmode` or `playmode`. |
 | `--results` | **Yes** | Output path for the NUnit XML results file. Parent directory is created automatically. |
 | `--filter` | No | Unity `-testFilter` expression. See filter syntax below. |
@@ -184,7 +184,7 @@ When the Unity editor is running on the target project, `unictl test` automatica
 unictl test --platform <editmode|playmode> --results <path>
 ```
 
-If the editor is not running, unictl returns `editor_not_running` (exit 9) and suggests using `--batch`.
+If the editor is not running, unictl returns `editor_not_running` (exit 3) and suggests using `--batch`.
 
 ### How It Works
 

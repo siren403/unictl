@@ -360,6 +360,14 @@
       "hint_text": "No progress update received for 5 seconds. Editor may be deadlocked or heavily throttled.",
       "hint_command": "unictl doctor",
       "since_version": "0.6.0"
+    },
+    {
+      "kind": "xml_save_failed",
+      "emitted_from": ["test", "editor_lane"],
+      "exit_code": 8,
+      "hint_text": "Test results XML could not be saved. Check that --results path is writable.",
+      "hint_command": "unictl test --platform editmode --results <writable_path>",
+      "since_version": "0.6.0"
     }
   ]
 }
