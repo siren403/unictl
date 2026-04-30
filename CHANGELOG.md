@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.6.2] - 2026-04-30
+
 ### Added
 - Unity consumer smoke-test sandbox under `sandbox/UnictlSmokeProject` for validating Git UPM install, package resolve, and compile flows against a real Unity project.
 
