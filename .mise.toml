@@ -1,0 +1,30 @@
+[tools]
+bun = "1.3.12"
+rust = "1.94.1"
+
+[env]
+UNICTL_ROOT = "{{config_root}}"
+
+[tasks.unictl]
+description = "Run the local unictl CLI from TypeScript source"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/unictl.ps1"
+
+[tasks.check]
+description = "Run the default unictl validation suite"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/check.ps1"
+
+[tasks."check:error-registry"]
+description = "Validate CLI/C# error registry, hints, and capabilities drift"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/check-error-registry.ps1"
+
+[tasks."check:meta-guids"]
+description = "Validate Unity UPM .meta GUID uniqueness and placeholder patterns"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/check-meta-guids.ps1"
+
+[tasks."release:dry-run"]
+description = "Run release validation without publishing, pushing, or tagging"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/release-dry-run.ps1"
+
+[tasks.release]
+description = "Run the real release flow: version commit, npm publish, push, tag, tag push"
+run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/release.ps1"

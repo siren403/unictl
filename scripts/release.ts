@@ -205,6 +205,12 @@ function runAssemble(version: string, outputDir?: string): void {
   }
 }
 
+function runValidationScripts(): void {
+  console.log("  Running validation scripts");
+  run(["bun", "run", "scripts/check-error-registry.ts"]);
+  run(["bun", "run", "scripts/check-unity-meta-guids.ts"]);
+}
+
 // --- main ---
 
 const args = process.argv.slice(2);
@@ -241,6 +247,10 @@ validateChangelog(next);
 console.log("  Step 2b: promote [Unreleased] → [" + next + "] + update ROADMAP header");
 promoteChangelog(next);
 updateRoadmapHeader(next);
+
+// Release blockers that should run before artifact assembly/publish.
+console.log("  Step 2c: repository validation");
+runValidationScripts();
 
 // Post-version-sync: run assemble.ts to build integration artifacts + checksums
 console.log("  Step 3: assemble integration artifacts");

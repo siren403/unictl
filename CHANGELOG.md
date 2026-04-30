@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+- Repo-local `AGENTS.md` and mise-based project runtime/task harness for agent sessions.
+- Unity `.meta` GUID validation for the bundled UPM editor package to catch duplicate, placeholder, and low-entropy GUIDs before release.
+
+### Changed
+- Release validation now runs the error registry drift check and Unity `.meta` GUID check before packaging.
+
 ---
 
 ## [0.6.3] - 2026-04-30
