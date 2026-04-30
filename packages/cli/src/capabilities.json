@@ -58,7 +58,7 @@
     },
     {
       "name": "init",
-      "description": "Scaffold a consumer project's package.json + UPM reference.",
+      "description": "Add or update the com.unictl.editor manifest reference. Unity resolves/imports it on editor refresh, editor restart, or batch compile.",
       "key_flags": [
         "--project",
         "--repo-url"

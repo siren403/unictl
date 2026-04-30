@@ -324,6 +324,10 @@ function runInit(args: {
         manifest_path: getManifestPath(projectRoot),
         reference: desired.reference,
         reference_source: desired.source,
+        next_steps: [
+          "If the Unity Editor is closed, run `unictl compile --project <project>` to force Unity package resolve and compile.",
+          "If the Unity Editor is open, use Unity Package Manager refresh/re-resolve or restart the editor; pre-install live refresh is not guaranteed.",
+        ],
       },
     };
   }
@@ -339,6 +343,10 @@ function runInit(args: {
         current_reference: currentReference,
         desired_reference: desired.reference,
         reference_source: desired.source,
+        next_steps: [
+          "Review the existing reference before replacing it.",
+          "Use `--force` only when you intentionally want to update the manifest entry.",
+        ],
       },
     };
   }
@@ -366,6 +374,11 @@ function runInit(args: {
       previous_reference: currentReference,
       next_reference: desired.reference,
       reference_source: desired.source,
+      next_steps: [
+        "If the Unity Editor is closed, run `unictl compile --project <project>` to force Unity package resolve and compile.",
+        "If the Unity Editor is open, Unity may not immediately notice this external manifest edit; use Package Manager refresh/re-resolve or restart the editor.",
+        "`unictl` IPC commands become available only after `com.unictl.editor` has been imported and compiled.",
+      ],
     },
   };
 }
@@ -645,7 +658,10 @@ const doctorCmd = defineCommand({
 });
 
 const initCmd = defineCommand({
-  meta: { name: "init", description: "Add or update the `com.unictl.editor` dependency in manifest.json" },
+  meta: {
+    name: "init",
+    description: "Add or update the `com.unictl.editor` dependency in manifest.json. This edits the manifest only; Unity resolves/imports the package on editor refresh, editor restart, or batch compile.",
+  },
   args: {
     project: {
       type: "string",

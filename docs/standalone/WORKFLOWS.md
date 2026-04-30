@@ -5,18 +5,29 @@ Common operator tasks for `unictl@0.3.0+`.
 ## Quick start
 
 ```bash
-# 1. Verify environment
+# 1. Add the Unity editor package to the consumer project manifest
+bunx unictl@latest init --project /abs/path/to/project
+
+# 2. If the editor is closed, force package resolve + compile once
+unictl compile --project /abs/path/to/project
+
+# 3. Verify environment
 bunx unictl@latest doctor --project /abs/path/to/project
 
-# 2. Open the editor (or confirm it is already running)
+# 4. Open the editor (or confirm it is already running)
 unictl editor open --project /abs/path/to/project
 
-# 3. List available built-in commands
+# 5. List available built-in commands
 unictl command list --project /abs/path/to/project
 
-# 4. Trigger a build
+# 6. Trigger a build
 unictl command build_project -p target=StandaloneWindows64 --project /abs/path/to/project
 ```
+
+`init` is a manifest edit, not an editor-side command. Before `com.unictl.editor` has been
+imported and compiled there is no IPC endpoint for `unictl` to call, so an already-open Editor
+may need a Package Manager refresh/re-resolve or an editor restart before live commands work.
+For deterministic first install checks, close the Editor and run `unictl compile`.
 
 ## Build lanes
 

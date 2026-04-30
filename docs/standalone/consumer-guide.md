@@ -33,6 +33,21 @@ Pin to a release tag. Unity resolves the git URL on next editor open and compile
 
 To update later, change the tag in `manifest.json` and let Unity re-resolve.
 
+You can also let the CLI write the manifest entry:
+
+```bash
+bunx unictl@latest init --project /abs/path/to/project
+```
+
+`init` only edits `Packages/manifest.json`; it does not guarantee that an already-open Unity
+Editor will immediately resolve or import the new package. Use it this way:
+
+| Editor state | Recommended follow-up |
+|--------------|----------------------|
+| Closed | Run `unictl compile --project /abs/path/to/project` to force package resolve and script compile, or open the editor normally. |
+| Open and package not installed yet | Use Unity Package Manager refresh/re-resolve, or restart the editor. `unictl` IPC commands are not available until the package imports and compiles. |
+| Open and package already installed | Use `unictl doctor` / `unictl health` to confirm the IPC endpoint before running editor-lane commands. |
+
 ---
 
 ## 3. Install the CLI
