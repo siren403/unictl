@@ -124,8 +124,8 @@ function promoteChangelog(version: string): void {
   const content = readFileSync(CHANGELOG_PATH, "utf-8");
   const date = new Date().toISOString().slice(0, 10);
   const promoted = content.replace(
-    "## [Unreleased]\n",
-    `## [Unreleased]\n\n---\n\n## [${version}] - ${date}\n`
+    /## \[Unreleased\](\r?\n)/,
+    `## [Unreleased]$1$1---$1$1## [${version}] - ${date}$1`
   );
   if (promoted === content) {
     console.error("\n  ERROR: '## [Unreleased]' header not found in CHANGELOG.md.\n");
