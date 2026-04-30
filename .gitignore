@@ -2,3 +2,15 @@ node_modules/
 .unictl/
 .tmp/
 native/unictl_native/target/
+
+# Local Unity consumer smoke-test projects.
+sandbox/*/Library/
+sandbox/*/Temp/
+sandbox/*/Logs/
+sandbox/*/UserSettings/
+sandbox/*/Build/
+sandbox/*/Builds/
+sandbox/*/obj/
+sandbox/*/*.csproj
+sandbox/*/*.sln
+sandbox/*/*.user
