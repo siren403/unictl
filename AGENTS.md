@@ -66,13 +66,12 @@ For narrower changes:
 - Unity UPM package files or `.meta` changes: `mise run check:meta-guids`
 - Release path: `mise run release:dry-run -- <version>`
 
-## Unity UPM `.meta` Rules
+## Unity Asset `.meta` Rules
 
-- Never hand-write placeholder Unity GUIDs.
-- Do not use patterned GUIDs such as `a1b2...`, `c3d4...`, `0000...`, `1111...`, or sequential sample values.
-- If an agent creates a `.meta` file without Unity, it must generate a random 32-character lowercase hex GUID.
-- Duplicate or low-entropy-looking GUIDs in `packages/upm/com.unictl.editor` are release blockers.
-- `scripts/check-unity-meta-guids.ts` is the mechanical guard for this rule and is run by release validation.
+- Do not directly create or edit Unity asset `.meta` files by hand or from an agent.
+- Let the Unity Editor create and update asset `.meta` files.
+- If a `.meta` file must be repaired without the Unity Editor, stop and document the exception before changing it.
+- `scripts/check-unity-meta-guids.ts` is a release guard for accidental malformed `.meta` state in the bundled UPM package.
 
 ## Sandbox Projects
 
