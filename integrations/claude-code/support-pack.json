@@ -1,6 +1,6 @@
 {
   "name": "unictl-claude-code-support",
-  "version": "0.6.2",
+  "version": "0.6.3",
   "description": "Thin wrapper support pack for running unictl workflows from Claude Code workspaces.",
   "artifactName": "claude-code-support"
 }

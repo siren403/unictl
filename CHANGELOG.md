@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.6.3] - 2026-04-30
+
 ### Fixed
 - Replaced placeholder Unity `.meta` GUIDs for `BuildEntry.cs` and `BuildRunner.cs` to avoid package import conflicts in consumer projects.
 
