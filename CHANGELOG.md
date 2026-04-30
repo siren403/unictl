@@ -11,6 +11,12 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+- Unity consumer smoke-test sandbox under `sandbox/UnictlSmokeProject` for validating Git UPM install, package resolve, and compile flows against a real Unity project.
+
+### Changed
+- `unictl init` help, JSON output, capabilities metadata, and standalone docs now clarify that `init` only edits `Packages/manifest.json`; Unity resolves/imports the package on Package Manager refresh, editor restart, or batch compile.
+
 ---
 
 ## [0.6.1] - 2026-04-28
