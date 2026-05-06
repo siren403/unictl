@@ -33,6 +33,36 @@ This document is auto-generated from `packages/cli/src/error-registry.json`.
 | `job_not_found` | build_runner | 3 | No progress file for that job_id. Verify the id returned by build_project, or the job may have been pruned (retention policy keeps last 10). |
 | `progress_read_failed` | build_runner | 125 | Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds. |
 | `not_yet_implemented` | build_runner | 125 | this capability is scaffolded in P1; wire-up lands with later phases |
+| `editor_lane_unavailable` | cli, test | 2 | Editor lane is not yet available. Use --batch to run tests in headless batchmode. |
+| `tests_failed` | test | 1 | One or more tests failed. Check the results XML for details. |
+| `no_assemblies` | test | 3 | No tests found. Verify that test assemblies are configured for the target platform. |
+| `xml_parse_failed` | test | 4 | Test results XML missing or unparseable. Check the Unity log for errors. |
+| `unity_crash` | test | 5 | Unity crashed or exited abnormally during test run. Run doctor to verify installation. |
+| `test_timeout` | test | 6 | Test run exceeded the wall-clock timeout. Increase --timeout or reduce test scope. |
+| `test_invalid_filter` | test | 7 | Unity rejected the test filter expression. Check assembly name, namespace, or method spelling. |
+| `unknown_test_failure` | test | 8 | Tests completed but Unity exited non-zero. Check the Unity log for unexpected errors. |
+| `editor_busy_playing` | test, editor_lane | 2 | Editor is in Play mode. Stop Play mode before running tests. |
+| `editor_busy_compiling` | test, editor_lane | 2 | Editor is compiling scripts. Wait for compilation to finish. |
+| `editor_busy_updating` | test, editor_lane | 2 | Editor is importing assets. Wait for asset database refresh to finish. |
+| `editor_dirty_scene` | test, editor_lane | 2 | One or more open scenes have unsaved changes. Save or pass --allow-unsaved-scenes. |
+| `editor_dirty_prefab_stage` | test, editor_lane | 2 | Prefab stage has unsaved changes. Exit or save the prefab stage before running tests. |
+| `editor_reload_active` | test, editor_lane | 2 | PlayMode tests with full domain reload are not supported in editor lane. Use --batch or enable DisableDomainReload in Enter Play Mode settings. |
+| `results_path_unwritable` | test, editor_lane | 2 | Cannot write to the specified results path. Check directory permissions or specify a writable path. |
+| `test_already_running` | test, editor_lane | 2 | Another test job is already running in the editor. Wait for it to complete before starting a new run. |
+| `editor_died` | test, editor_lane | 8 | Editor process exited unexpectedly during test run. Check Unity crash logs. |
+| `editor_session_changed` | test, editor_lane | 8 | Editor was restarted mid-run. The test job is no longer valid. Re-run the test. |
+| `test_heartbeat_stale` | test, editor_lane | 8 | No progress update received for 5 seconds. Editor may be deadlocked or heavily throttled. |
+| `xml_save_failed` | test, editor_lane | 8 | Test results XML could not be saved. Check that --results path is writable. |
+| `not_implemented` | cli | 78 | This command is a Phase C skeleton stub; functional implementation arrives in Phase D or E. Track progress on issue siren403/unictl#7. |
+| `editor_reload_active` | cli, editor_lane | 3 | Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7. |
+| `wait_timeout` | cli | 124 | Wait budget exhausted before the target state was reached. Verify editor health with 'unictl health' or raise --timeout. F.3 matrix lives in docs/standalone/v0.7-spikes/F3-wait-timeouts.md. |
+| `interrupted` | cli | 130 | SIGINT (Ctrl+C) was received during a wait. Re-run if the cancellation was unintentional. |
+| `editor_unresponsive` | cli | 3 | Editor heartbeat is stale past the A4 reload ceiling. Check editor logs and consider 'unictl editor restart'. |
+| `project_root_invalid` | cli | 2 | Could not resolve a Unity project root from --project or cwd. Pass --project <path-to-project-root>. |
+| `setting_key_not_found` | cli | 2 | Top-level scalar key not found in ProjectSettings.asset. Inspect the file or use a feature bundle (input set / scripting set / deploy keystore set). |
+| `confirmation_required` | cli | 2 | settings raw-set requires --no-warranty to acknowledge that raw edits bypass Unity setter side effects. Prefer feature bundles when one fits. |
+| `keystore_path_not_found` | cli | 2 | Keystore file not found at the resolved --path. Verify the file exists. |
+| `secret_required` | cli | 2 | Keystore and key passwords are required. Pass --keystore-pass / --key-pass or pipe via stdin. Passwords are never echoed or logged. |
 
 ## Exit Code Summary
 

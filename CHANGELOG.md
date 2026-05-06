@@ -11,12 +11,151 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+v0.7.0 lands the verb-noun command tree, native heartbeat ABI, runtime liveness
+descriptor, and lifecycle settings bundles. The legacy `unictl command` verb
+and `--help --json` alias remain functional but are deprecated; v1.0 will
+remove them.
+
+See [MIGRATION.md](MIGRATION.md) and [DEPRECATION.md](DEPRECATION.md) for the
+v0.6 → v0.7 migration path.
+
 ### Added
-- Repo-local `AGENTS.md` and mise-based project runtime/task harness for agent sessions.
-- Unity `.meta` GUID validation for the bundled UPM editor package to catch duplicate, placeholder, and low-entropy GUIDs before release.
+
+#### Phase A — Heartbeat ABI + native liveness
+- `unictl_heartbeat` and `unictl_get_liveness` native exports (JSON-over-pipe;
+  no shared C structs). Editor-side `UnictlHeartbeat.cs` emits 1Hz throttled
+  + push-on-phase-change payloads with <4KB/s allocation budget.
+- `GET /liveness` IPC route returns the canonical liveness envelope:
+  `{schema_version, alive_ms_ago, last_heartbeat_ms, last_state, pid,
+   handler_registered, phase_override, native_version}`.
+- `phase_override` in `{never_seen, unresponsive, null}` lets agents
+  distinguish cold start from an editor that has fallen behind the A4 30s
+  reload ceiling.
+- Phase enum precedence (highest first):
+  `quitting > reloading > compiling > importing > playing > paused > idle`.
+
+#### Phase B — `runtime.json` + PID guard
+- `Library/unictl/runtime.json` writer (`UnictlRuntimeJson.cs`) exposes
+  PID, started_at, project_root, transport, paths, native + UPM versions,
+  Unity version, session id, platform, and `terminal_reason`.
+- `terminal_reason="quit"` is written before graceful shutdown; the file
+  is then best-effort deleted. Crash detection writes a sidecar
+  `runtime.json.crashed.<pid>.<started>.json` for postmortem.
+- CLI reader (`runtime.ts`) classifies state:
+  `not_running | schema_unsupported | parse_failed | alive | died | pid_mismatch`
+  with bounded retry against the F.2 atomic-rename window.
+- `isPidAlive(pid)` cross-platform PID liveness via `process.kill(pid, 0)`.
+- B6 PID-reuse guard: `alive` requires both a live PID AND a matching
+  `project_root` to defend against PID recycling on long-running hosts.
+
+#### Phase C — Verb-noun command tree
+- New canonical verbs alongside `unictl command`:
+  - `unictl editor compile | play | stop | refresh` (in-editor IPC; distinct
+    from the existing batchmode `unictl compile`).
+  - `unictl input set <legacy|new|both> [--restart]` — Input System handler.
+  - `unictl scripting set <mono|il2cpp> --platform <P>` — scripting backend.
+  - `unictl deploy android keystore set --path --alias` — keystore path/alias
+    (passwords intentionally not persisted; supply at build time via env).
+  - `unictl settings raw-set <key> <value> --no-warranty` — escape hatch.
+  - `unictl wait <state> [--timeout T]` — block on editor state.
+  - `unictl describe-all` — aggregate canonical agent metadata.
+- `--describe` flag on every v0.7 verb emits canonical `DescribeMetadata`
+  (schema_version, name, verb, noun, summary, when, when_not, args, examples,
+  exit_codes, related, since_version, stability) and exits 0.
+- `--json` defaults to ON for v0.7 verb-noun commands; `UNICTL_HUMAN=1` env
+  or `--no-json` flag forces human output. Legacy v0.6 commands keep their
+  existing default-off behavior. Centralized in `output.ts`.
+- `unictl command` invocations of v0.7-mappable surfaces emit a one-line
+  `[deprecated]` stderr suggestion (e.g. `command editor_control -p
+  action=play` → `unictl editor play`). Behavior unchanged.
+
+#### Phase D — Wait engine
+- `unictl wait <state>` and editor sub-verbs `--wait` block until the
+  editor reaches the target state or `--timeout` fires. Pull cadence
+  250ms (F.7).
+- F.3 default timeout matrix: `editor.compile.idle=120s`,
+  `editor.play.playing=15s`, `editor.stop.idle=30s`,
+  `editor.refresh.idle=90s`, `(any).reachable=120s`,
+  `(any).reloading=30s`, `(any).quit=15s`.
+- `parseDuration` accepts `30s | 2m | 1h | 120 (bare seconds) | 0 (unbounded)`.
+- Env override: `UNICTL_WAIT_TIMEOUT_DEFAULT_<VERB>_<STATE>` between flag
+  and compiled default in precedence.
+- Reload-aware re-arm (D6 + A4): when phase=`reloading` and target ≠
+  `reloading`, the budget clock pauses; resumes on phase change. The A4
+  30s ceiling is enforced via the `unresponsive` override which
+  short-circuits to `editor_unresponsive` rather than silently consuming
+  budget.
+- SIGINT (Ctrl+C) during wait → exit 130, `kind: interrupted`.
+- Liveness fast-fail: when `runtime.json` reports `not_running` or `died`
+  and target ≠ `reachable`, return `editor_not_running` immediately
+  (elapsed_ms 0).
+
+#### Phase E — Settings lifecycle bundles
+- Line-oriented YAML editor for `ProjectSettings.asset` preserves Unity's
+  `%YAML 1.1` + `tag:unity3d.com` markers byte-for-byte (no normalization,
+  no key reorder). Atomic writes via temp file + rename.
+- Editor-closed gate (`requireEditorClosed`) on every settings command;
+  `--restart` issues `editor_quit` IPC + 1.5s grace + recheck before
+  mutating.
+- `input set` / `scripting set` write to `activeInputHandler` and
+  `scriptingBackend.<Platform>` (nested map; supports `Android`, `iOS`,
+  `Standalone`, `WebGL`, `tvOS`, `PS4`, `PS5`, `XboxOne`, `Nintendo Switch`).
+- `deploy android keystore set` writes path/alias and sets
+  `androidUseCustomKeystore=1`. Passwords never persist to
+  ProjectSettings.asset (Unity standard); response includes a `notes`
+  array pointing to `UNITY_ANDROID_KEYSTORE_PASS` /
+  `UNITY_ANDROID_KEYALIAS_PASS` env vars.
+- `settings raw-set` requires `--no-warranty` (probed via
+  `rawArgs.includes` to bypass citty/mri `--no-X` boolean negation).
+  Top-level scalars only; dotted paths rejected (use feature bundles).
+
+#### Phase F — Per-verb `--wait` integration
+- `editor compile | play | stop | refresh` accept `--wait [<state>]`
+  + `--timeout <duration>`. Bare `--wait` uses the verb-specific F.3
+  default state. Response merges the IPC dispatch result with a `wait`
+  block (`state, phase, alive_ms_ago, elapsed_ms`) on success.
+
+#### Error envelope (v0.7)
+- New structured envelope on v0.7 commands:
+  `{ok, error: {code, kind, message, recovery, related, context, hint_command, hint_text}}`.
+  Numeric `code` allocated per F.6 stride 0x1000 namespaces (special
+  0x0001-0x000F, validation 0x0010-0x001F, editor 0x1000, build 0x2000,
+  test 0x3000, profile 0x4000, ipc 0x5000 with heartbeat 0x5010-0x5012
+  + reload 0x5020, project 0x6000, input/scripting/settings 0x7000,
+  deploy 0x8000).
+- New error kinds (since 0.7.0): `not_implemented` (exit 78),
+  `editor_reload_active` (exit 3, CLI lane), `wait_timeout` (124),
+  `interrupted` (130), `editor_unresponsive` (3), `project_root_invalid`
+  (2), `setting_key_not_found` (2), `confirmation_required` (2),
+  `secret_required` (2), `keystore_path_not_found` (2).
 
 ### Changed
-- Release validation now runs the error registry drift check and Unity `.meta` GUID check before packaging.
+- `unictl --help` lists the v0.7 verb-noun tree alongside the legacy verbs.
+- `editor_reload_active` exit code on the CLI lane is now 3 (lane unavailable),
+  matching the IPC lane semantics. The earlier exit-code 2 entry remains for
+  the test verb's batch-mode preflight.
+- v0.7 commands consistently emit the structured envelope through `output.ts`;
+  legacy v0.6 verbs keep their existing per-call envelopes.
+
+### Deprecated
+- `unictl command <tool>` and `unictl <subcmd> --help --json` are deprecated
+  in v0.7 and removed in v1.0. v0.7 emits a one-line `[deprecated]` stderr
+  suggestion on mappable invocations. See [DEPRECATION.md](DEPRECATION.md).
+
+### Plan + spike artifacts
+- `docs/standalone/v0.7-plan.md` (planner + architect + critic synthesis)
+  and `docs/standalone/v0.7-spikes/` (F.2-F.9 phase-0 outputs) document
+  the design decisions backing this release.
+- `docs/standalone/v0.7-adr/` consolidates per-phase implementation notes
+  (A1, A2/A3, A4, A5, A7, B, B1, B7, C-skeleton, C-final, D, E, F).
+
+### Pre-v0.7 housekeeping (still applies)
+- Repo-local `AGENTS.md` and mise-based project runtime/task harness for
+  agent sessions.
+- Unity `.meta` GUID validation for the bundled UPM editor package to
+  catch duplicate, placeholder, and low-entropy GUIDs before release.
+- Release validation now runs the error registry drift check and Unity
+  `.meta` GUID check before packaging.
 
 ---
 

@@ -1,5 +1,174 @@
 # Migration Guide
 
+## 0.6.x → 0.7.0
+
+### Summary
+
+v0.7.0 introduces a verb-noun command tree alongside the legacy
+`unictl command <tool>` surface. The legacy surface keeps working — every
+v0.6 invocation that worked before still works the same way and emits the
+same exit codes. The new surface is layered on top with structured error
+envelopes, canonical agent metadata via `--describe`, and a wait engine
+for editor-state synchronization. v1.0 will remove the legacy surface.
+
+No breaking IPC protocol changes. Native ABI is additive-only after Phase A7.
+
+### What's new at the call site
+
+| Before (v0.6) | After (v0.7) |
+|---------------|--------------|
+| `unictl command editor_control -p action=play` | `unictl editor play` |
+| `unictl command editor_control -p action=stop` | `unictl editor stop` |
+| `unictl command editor_control -p action=compile` | `unictl editor compile` |
+| `unictl command editor_control -p action=refresh` | `unictl editor refresh` |
+| `unictl command list` | `unictl describe-all` |
+| `unictl --help --json` (text→JSON) | `unictl <verb> --describe` (canonical metadata) |
+
+The legacy forms continue to work and emit a one-line `[deprecated]`
+stderr suggestion on the mappable cases. They will be removed in v1.0
+per [DEPRECATION.md](DEPRECATION.md).
+
+### Output format change for v0.7 verbs
+
+v0.7 verbs default to `--json` ON (machine-readable). v0.6 verbs keep
+their previous default (human-readable) for backward compatibility.
+
+To force human output:
+
+- Per call: append `--no-json`.
+- Per shell: `export UNICTL_HUMAN=1`.
+
+### Error envelope shape
+
+v0.7 verbs emit the new structured envelope:
+
+```jsonc
+{
+  "ok": false,
+  "error": {
+    "code": 4098,            // numeric code per F.6 namespaces (NEW)
+    "kind": "editor_not_running",
+    "message": "...",
+    "recovery": "...",       // NEW — concrete next action
+    "related": ["editor.open", "wait"],  // NEW — sibling commands
+    "context": { ... },      // NEW — structured payload for agents
+    "hint_command": "unictl editor open",
+    "hint_text": null,       // NEW — human prose hint
+    "exit_code": 3
+  }
+}
+```
+
+v0.6 verbs continue to emit the previous envelope shape unchanged. The
+human-readable `kind` slug remains the canonical branch key — agents
+should branch on `kind`, not on `code`. The `code` field is a stable
+identifier for telemetry and cross-version correlation.
+
+### `--describe` (canonical agent metadata)
+
+Every v0.7 verb supports `--describe`:
+
+```bash
+unictl editor compile --describe
+# → DescribeMetadata JSON: schema_version, name, verb, noun, summary,
+#   when, when_not, args, examples, exit_codes, related, since_version,
+#   stability. Exits 0 without running the command.
+
+unictl describe-all
+# → { schema_version: 1, commands: [...] } — aggregate over all v0.7 verbs.
+```
+
+`unictl --help --json` continues to work but is deprecated. Migrate to
+`--describe` ahead of v1.0.
+
+### Wait integration
+
+Synchronous "dispatch then block until state X" replaces sleep+retry
+loops:
+
+```bash
+# In-editor compile, block until it settles to idle (default 120s)
+unictl editor compile --wait idle --timeout 90s
+
+# Enter Play mode, wait until live (default 15s)
+unictl editor play --wait
+
+# Standalone wait
+unictl wait reachable --timeout 30s
+```
+
+Default timeouts come from the F.3 matrix (see
+`docs/standalone/v0.7-spikes/F3-wait-timeouts.md`). Override with
+`--timeout` or `UNICTL_WAIT_TIMEOUT_DEFAULT_<VERB>_<STATE>` env vars.
+SIGINT during a wait exits 130 with `kind: interrupted`.
+
+### Settings lifecycle bundles (editor-closed)
+
+`unictl input set`, `unictl scripting set`, `unictl deploy android
+keystore set`, and `unictl settings raw-set` mutate `ProjectSettings.asset`
+directly. They require the editor to be closed (Unity caches in-memory
+PlayerSettings and would overwrite the change otherwise).
+
+```bash
+# Switch Input System (closes editor first via --restart)
+unictl input set new --restart
+
+# IL2CPP for Android (editor must be closed already)
+unictl scripting set il2cpp --platform android
+
+# Configure keystore path/alias (passwords supplied at build time)
+unictl deploy android keystore set --path Build/release.keystore --alias release
+
+# Escape hatch — accept the no-warranty contract
+unictl settings raw-set companyName Tinycell --no-warranty
+```
+
+`deploy android keystore set` does NOT persist passwords. Supply them at
+build time via the standard Unity env vars `UNITY_ANDROID_KEYSTORE_PASS`
+and `UNITY_ANDROID_KEYALIAS_PASS`, or via `-keystorePass`/`-keyaliasPass`
+batchmode arguments.
+
+### Native + UPM compatibility
+
+- The native bridge gained `unictl_heartbeat` and `unictl_get_liveness`
+  exports. Existing exports unchanged. ABI is additive-only after the
+  Phase A7 freeze.
+- The UPM package gained `UnictlHeartbeat.cs` and `UnictlRuntimeJson.cs`
+  ([InitializeOnLoad] members). Existing code unchanged. After upgrading
+  the UPM package, restart the editor once so it picks up the new sources;
+  `Library/unictl/runtime.json` will appear once the editor reaches the
+  ready state.
+- A `runtime.json` schema bump (currently 1) follows the
+  schema-version-above-supported gate; CLI returns
+  `kind: schema_unsupported` on a future bump rather than parsing
+  unknown fields.
+
+### Recommended migration steps
+
+1. Update the UPM package reference to the v0.7.0 tag and restart the
+   editor. Confirm `Library/unictl/runtime.json` appears.
+2. Bump the CLI: `bunx unictl@0.7.0 doctor`.
+3. Replace any `unictl command editor_control -p action=...` call sites
+   with the equivalent verb (see table above).
+4. If you parse `--help --json` output, migrate to `--describe` /
+   `unictl describe-all`.
+5. If you have sleep+retry loops around editor state, replace with
+   `unictl wait <state> --timeout T` or the per-verb `--wait` flag.
+6. If you run CI scripts that toggle Input System / scripting backend /
+   keystore in batch, prefer the new feature bundles over hand-editing
+   YAML.
+
+### What does NOT change
+
+- IPC protocol (named pipe + JSON request/response).
+- Build / test / compile / doctor / capabilities / health / version
+  command surfaces.
+- Error kinds emitted by v0.6 verbs.
+- Project layout — no new required directories or files in consumer
+  projects.
+
+---
+
 ## 0.3.0 → 0.4.0
 
 ### Summary
