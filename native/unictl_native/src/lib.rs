@@ -49,45 +49,42 @@ static LIVENESS: Liveness = Liveness {
     pid: AtomicI32::new(0),
 };
 
-/// Build the `/liveness` JSON response. Shared by `unictl_get_liveness` export
-/// and the `("GET", "/liveness")` route in `protocol.rs`.
+/// Pure-function snapshot used by `format_liveness_response`. Extracted so A6
+/// unit tests can exercise the formatter without touching the live `LIVENESS`
+/// global.
+pub(crate) struct LivenessSnapshot {
+    pub last_heartbeat_ms: i64,
+    pub pid: i32,
+    pub raw_state: String,
+    pub since_ms: i64,
+    pub handler_registered: bool,
+    pub threshold_ms: i64,
+    pub native_version: &'static str,
+}
+
+/// Format the `/liveness` JSON body from a snapshot. Pure — no global reads.
 ///
 /// `last_state` is inlined as raw JSON — the producer (managed) controls the
 /// shape and validates it before sending. Native does not re-parse.
 ///
 /// `phase_override` semantics:
 ///   - `"never_seen"`: heartbeat has never arrived (cold start before A2 emitter ran)
-///   - `"unresponsive"`: last heartbeat older than `UNICTL_RELOAD_THRESHOLD_MS` (default 30000)
+///   - `"unresponsive"`: last heartbeat older than `threshold_ms`
 ///   - `null`: alive (use `last_state.phase` as authoritative)
-pub(crate) fn build_liveness_response() -> String {
-    let last_ms = LIVENESS.last_heartbeat_ms.load(Ordering::SeqCst);
-    let pid = LIVENESS.pid.load(Ordering::SeqCst);
-    let raw_state = LIVENESS.state_json.lock().unwrap().clone();
-    let last_state = if raw_state.is_empty() { "{}".to_owned() } else { raw_state };
+pub(crate) fn format_liveness_response(snap: &LivenessSnapshot) -> String {
+    let last_state: &str = if snap.raw_state.is_empty() {
+        "{}"
+    } else {
+        snap.raw_state.as_str()
+    };
 
-    let since_ms: i64 = LIVENESS
-        .last_managed_instant
-        .lock()
-        .unwrap()
-        .as_ref()
-        .map(|inst| inst.elapsed().as_millis() as i64)
-        .unwrap_or(-1);
-
-    let threshold_ms = std::env::var("UNICTL_RELOAD_THRESHOLD_MS")
-        .ok()
-        .and_then(|s| s.parse::<i64>().ok())
-        .unwrap_or(30_000);
-
-    let phase_override = if since_ms < 0 {
+    let phase_override = if snap.since_ms < 0 {
         r#""never_seen""#
-    } else if since_ms > threshold_ms {
+    } else if snap.since_ms > snap.threshold_ms {
         r#""unresponsive""#
     } else {
         "null"
     };
-
-    let handler_registered = HANDLER.lock().unwrap().is_some();
-    let native_version = env!("CARGO_PKG_VERSION");
 
     format!(
         concat!(
@@ -101,8 +98,38 @@ pub(crate) fn build_liveness_response() -> String {
             r#""native_version":"{}""#,
             r#"}}"#,
         ),
-        since_ms, last_ms, last_state, pid, handler_registered, phase_override, native_version
+        snap.since_ms,
+        snap.last_heartbeat_ms,
+        last_state,
+        snap.pid,
+        snap.handler_registered,
+        phase_override,
+        snap.native_version
     )
+}
+
+/// Build the `/liveness` JSON response from current global state. Shared by
+/// `unictl_get_liveness` export and the `("GET", "/liveness")` route.
+pub(crate) fn build_liveness_response() -> String {
+    let snap = LivenessSnapshot {
+        last_heartbeat_ms: LIVENESS.last_heartbeat_ms.load(Ordering::SeqCst),
+        pid: LIVENESS.pid.load(Ordering::SeqCst),
+        raw_state: LIVENESS.state_json.lock().unwrap().clone(),
+        since_ms: LIVENESS
+            .last_managed_instant
+            .lock()
+            .unwrap()
+            .as_ref()
+            .map(|inst| inst.elapsed().as_millis() as i64)
+            .unwrap_or(-1),
+        handler_registered: HANDLER.lock().unwrap().is_some(),
+        threshold_ms: std::env::var("UNICTL_RELOAD_THRESHOLD_MS")
+            .ok()
+            .and_then(|s| s.parse::<i64>().ok())
+            .unwrap_or(30_000),
+        native_version: env!("CARGO_PKG_VERSION"),
+    };
+    format_liveness_response(&snap)
 }
 
 // --- exports ---
@@ -161,10 +188,21 @@ fn handle_command(body: &str) -> String {
         }
         None => {
             drop(handler);
-            // Domain Reload 중 — MAIN_QUEUE에 저장
-            MAIN_QUEUE.lock().unwrap().push(body.to_owned());
+            // A4: during a domain reload, return editor_reload_active envelope.
+            // /liveness remains the only route servable while HANDLER is None.
+            // Clients should poll /liveness and retry once phase != "reloading".
+            //
+            // BREAKING CHANGE vs v0.6: the old MAIN_QUEUE-deferred-accept path
+            // is removed. v0.6 callers that relied on `{accepted:true, deferred:true}`
+            // must migrate to the /liveness + retry pattern (or use --wait
+            // which handles this transparently per F.7).
+            //
+            // Numeric `code` allocated by C9 in Phase C (ipc_* namespace per F.6).
             let id = extract_field(body, "id");
-            format!(r#"{{"accepted":true,"id":"{}","deferred":true}}"#, id)
+            format!(
+                r#"{{"ok":false,"code":0,"kind":"editor_reload_active","message":"Editor is reloading; retry after /liveness reports phase != reloading","id":"{}"}}"#,
+                id
+            )
         }
     }
 }
@@ -347,4 +385,104 @@ pub extern "C" fn unictl_get_liveness(buf: *mut u8, len: usize) -> i32 {
         std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
     }
     bytes.len() as i32
+}
+
+// --- A6: unit tests for liveness response formatter ---
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn snapshot(since_ms: i64, raw_state: &str, registered: bool) -> LivenessSnapshot {
+        LivenessSnapshot {
+            last_heartbeat_ms: 1234567890,
+            pid: 4242,
+            raw_state: raw_state.to_owned(),
+            since_ms,
+            handler_registered: registered,
+            threshold_ms: 30_000,
+            native_version: "0.7.0-test",
+        }
+    }
+
+    #[test]
+    fn never_seen_when_no_heartbeat_yet() {
+        let snap = snapshot(-1, "", false);
+        let response = format_liveness_response(&snap);
+        assert!(
+            response.contains(r#""phase_override":"never_seen""#),
+            "response missing never_seen override: {}",
+            response
+        );
+        assert!(
+            response.contains(r#""last_state":{}"#),
+            "empty payload should default to empty object: {}",
+            response
+        );
+        assert!(response.contains(r#""alive_ms_ago":-1"#));
+        assert!(response.contains(r#""handler_registered":false"#));
+    }
+
+    #[test]
+    fn alive_when_recent_heartbeat() {
+        let snap = snapshot(500, r#"{"phase":"idle","is_playing":false}"#, true);
+        let response = format_liveness_response(&snap);
+        assert!(
+            response.contains(r#""phase_override":null"#),
+            "alive should have null override: {}",
+            response
+        );
+        assert!(response.contains(r#""alive_ms_ago":500"#));
+        assert!(response.contains(r#""last_state":{"phase":"idle","is_playing":false}"#));
+        assert!(response.contains(r#""handler_registered":true"#));
+        assert!(response.contains(r#""pid":4242"#));
+    }
+
+    #[test]
+    fn unresponsive_when_heartbeat_stale() {
+        let snap = snapshot(60_000, r#"{"phase":"idle"}"#, false);
+        let response = format_liveness_response(&snap);
+        assert!(
+            response.contains(r#""phase_override":"unresponsive""#),
+            "stale heartbeat should be unresponsive: {}",
+            response
+        );
+        // last_state still preserved so consumers see what the editor last reported.
+        assert!(response.contains(r#""last_state":{"phase":"idle"}"#));
+    }
+
+    #[test]
+    fn threshold_boundary_alive() {
+        // Exactly at threshold = still alive (since_ms > threshold flips, not >=).
+        let snap = snapshot(30_000, r#"{}"#, true);
+        let response = format_liveness_response(&snap);
+        assert!(response.contains(r#""phase_override":null"#));
+    }
+
+    #[test]
+    fn threshold_boundary_unresponsive() {
+        let snap = snapshot(30_001, r#"{}"#, false);
+        let response = format_liveness_response(&snap);
+        assert!(response.contains(r#""phase_override":"unresponsive""#));
+    }
+
+    #[test]
+    fn schema_version_is_present() {
+        let snap = snapshot(0, r#"{}"#, true);
+        let response = format_liveness_response(&snap);
+        assert!(
+            response.starts_with(r#"{"schema_version":1,"#),
+            "schema_version must be first field: {}",
+            response
+        );
+        assert!(response.contains(r#""native_version":"0.7.0-test""#));
+    }
+
+    #[test]
+    fn empty_payload_with_zero_since_ms_still_object() {
+        let snap = snapshot(0, "", true);
+        let response = format_liveness_response(&snap);
+        assert!(response.contains(r#""last_state":{}"#));
+        assert!(response.contains(r#""phase_override":null"#));
+    }
 }
