@@ -1,0 +1,67 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-07",
+  "notes": "Phase C9 (sub-PR C-errors) — numeric error code allocation per F.6 namespace stride 0x1000. Codes are stable identifiers; consumers should still branch on the human-readable `kind` slug for forward compatibility (per A4 plan note). The numeric `code` field becomes authoritative once C9 wires drift validation into mise run check:error-registry.",
+  "namespaces": {
+    "0x0000": "reserved (no error)",
+    "0x0001-0x000F": "special: timeout, generic",
+    "0x0010-0x001F": "validation_*",
+    "0x1000-0x1FFF": "editor_*",
+    "0x2000-0x2FFF": "build_*",
+    "0x3000-0x3FFF": "test_*",
+    "0x4000-0x4FFF": "profile_*",
+    "0x5000-0x5FFF": "ipc_* (heartbeat 0x5010-0x5012, reload 0x5020)",
+    "0x6000-0x6FFF": "project_*",
+    "0x7000-0x7FFF": "input_* + scripting_* + setting_* (Phase E)",
+    "0x8000-0x8FFF": "deploy_* (Phase E)"
+  },
+  "allocations": [
+    { "kind": "timeout",                          "code": 1,      "hex": "0x0001" },
+    { "kind": "invalid_param",                    "code": 16,     "hex": "0x0010" },
+    { "kind": "target_unsupported",               "code": 17,     "hex": "0x0011" },
+
+    { "kind": "editor_busy",                      "code": 4096,   "hex": "0x1000" },
+    { "kind": "editor_running",                   "code": 4097,   "hex": "0x1001" },
+    { "kind": "editor_not_running",               "code": 4098,   "hex": "0x1002" },
+    { "kind": "editor_died",                      "code": 4099,   "hex": "0x1003" },
+    { "kind": "editor_session_changed",           "code": 4100,   "hex": "0x1004" },
+    { "kind": "multi_instance",                   "code": 4101,   "hex": "0x1005" },
+    { "kind": "unity_crash",                      "code": 4102,   "hex": "0x1006" },
+    { "kind": "unity_not_found",                  "code": 4103,   "hex": "0x1007" },
+    { "kind": "cancelled_by_user",                "code": 4104,   "hex": "0x1008" },
+    { "kind": "not_cancellable",                  "code": 4105,   "hex": "0x1009" },
+    { "kind": "not_yet_implemented",              "code": 4106,   "hex": "0x100A" },
+    { "kind": "not_implemented",                  "code": 4107,   "hex": "0x100B" },
+
+    { "kind": "build_failed",                     "code": 8192,   "hex": "0x2000" },
+    { "kind": "build_exception",                  "code": 8193,   "hex": "0x2001" },
+    { "kind": "compile_failed",                   "code": 8194,   "hex": "0x2002" },
+    { "kind": "no_assemblies",                    "code": 8195,   "hex": "0x2003" },
+
+    { "kind": "test_timeout",                     "code": 12288,  "hex": "0x3000" },
+    { "kind": "test_invalid_filter",              "code": 12289,  "hex": "0x3001" },
+    { "kind": "test_heartbeat_stale",             "code": 12290,  "hex": "0x3002" },
+    { "kind": "tests_failed",                     "code": 12291,  "hex": "0x3003" },
+    { "kind": "unknown_test_failure",             "code": 12292,  "hex": "0x3004" },
+    { "kind": "xml_parse_failed",                 "code": 12293,  "hex": "0x3005" },
+    { "kind": "xml_save_failed",                  "code": 12294,  "hex": "0x3006" },
+
+    { "kind": "profile_not_found",                "code": 16384,  "hex": "0x4000" },
+    { "kind": "profile_invalid_path",             "code": 16385,  "hex": "0x4001" },
+    { "kind": "profile_invalid_extension",        "code": 16386,  "hex": "0x4002" },
+    { "kind": "profile_unsupported_on_this_unity","code": 16387,  "hex": "0x4003" },
+    { "kind": "profile_switch_requires_batch",    "code": 16388,  "hex": "0x4004" },
+    { "kind": "profile_not_applied",              "code": 16389,  "hex": "0x4005" },
+
+    { "kind": "ipc_error",                        "code": 20480,  "hex": "0x5000" },
+    { "kind": "ipc_no_progress_file",             "code": 20481,  "hex": "0x5001" },
+    { "kind": "heartbeat_invalid_payload",        "code": 20496,  "hex": "0x5010" },
+    { "kind": "heartbeat_native_unavailable",     "code": 20497,  "hex": "0x5011" },
+    { "kind": "liveness_buffer_too_small",        "code": 20498,  "hex": "0x5012" },
+    { "kind": "editor_reload_active",             "code": 20512,  "hex": "0x5020" },
+
+    { "kind": "project_locked",                   "code": 24576,  "hex": "0x6000" },
+    { "kind": "progress_read_failed",             "code": 24577,  "hex": "0x6001" },
+    { "kind": "job_not_found",                    "code": 24578,  "hex": "0x6002" }
+  ]
+}

@@ -17,6 +17,8 @@
 import { defineCommand } from "citty";
 import { command as ipcCommand } from "./client";
 import { emit, exitCodeFor, type OutputFlags } from "./output";
+import { lookupDescribe } from "./describe";
+import { errorEnvelope } from "./error";
 
 // ---------------------------------------------------------------------------
 // Shared flag / response helpers
@@ -38,6 +40,10 @@ const v07GlobalArgs = {
     type: "boolean",
     description: "Force JSON output (default ON for v0.7); use --no-json or UNICTL_HUMAN=1 for human output",
   },
+  describe: {
+    type: "boolean",
+    description: "Emit canonical agent metadata (DescribeMetadata) as JSON and exit without running the command",
+  },
 } as const;
 
 function readFlags(args: Record<string, unknown>): OutputFlags {
@@ -46,16 +52,35 @@ function readFlags(args: Record<string, unknown>): OutputFlags {
   return {};
 }
 
-function notImplemented(verb: string, plannedPhase: string): unknown {
+/**
+ * Short-circuit: if `--describe` is set, emit the metadata for `name` and
+ * exit 0. Returns true if the command should NOT continue executing.
+ *
+ * Per critic 4.0 + C-describe: --describe is the canonical agent metadata
+ * channel. If a command name is missing from the registry the caller falls
+ * back to its normal path (so a typo here doesn't silently break the verb).
+ */
+function maybeEmitDescribe(name: string, args: Record<string, unknown>, flags: OutputFlags): boolean {
+  if (args.describe !== true) return false;
+  const meta = lookupDescribe(name);
+  if (!meta) return false;
+  emit("new", meta, flags);
+  process.exit(0);
+}
+
+function notImplemented(verb: string, plannedPhase: string, related: readonly string[] = []) {
+  // Wrap the v0.7 errorEnvelope and tack on the v0.7 stub-specific exit_code so
+  // exitCodeFor() picks 78 (EX_CONFIG-style: feature not configured/built yet).
+  const env = errorEnvelope({
+    kind: "not_implemented",
+    message: `'${verb}' is a Phase C skeleton stub; functional implementation arrives in Phase ${plannedPhase}.`,
+    recovery: "Track progress on issue siren403/unictl#7. Use 'unictl command ...' for now.",
+    related,
+    context: { planned_phase: plannedPhase, verb },
+  });
   return {
-    ok: false,
-    error: {
-      kind: "not_implemented",
-      message: `'${verb}' is a Phase C skeleton stub; functional implementation arrives in Phase ${plannedPhase}.`,
-      recovery: `Track progress on issue siren403/unictl#7. Use 'unictl command ...' for now.`,
-      hint_command: "unictl command list",
-      exit_code: 78, // EX_CONFIG-style: feature not configured/built yet
-    },
+    ...env,
+    error: { ...env.error, exit_code: 78 },
   };
 }
 
@@ -68,7 +93,9 @@ function makeEditorActionCommand(action: string, summary: string) {
     meta: { name: action, description: summary },
     args: { ...v07GlobalArgs },
     run: async ({ args }) => {
-      const flags = readFlags(args as Record<string, unknown>);
+      const argMap = args as Record<string, unknown>;
+      const flags = readFlags(argMap);
+      if (maybeEmitDescribe(`editor.${action}`, argMap, flags)) return;
       try {
         const result = await ipcCommand(
           "editor_control",
@@ -80,14 +107,14 @@ function makeEditorActionCommand(action: string, summary: string) {
         process.exit(exitCodeFor(payload));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
-        const payload = {
-          ok: false,
-          error: {
-            kind: "ipc_error",
-            message,
-            exit_code: 125,
-          },
-        };
+        const env = errorEnvelope({
+          kind: "ipc_error",
+          message,
+          recovery: "Verify the editor is running with 'unictl health'; if reloading, retry or use 'unictl wait reachable'.",
+          related: [`editor.${action}`, "editor.status"],
+          context: { action },
+        });
+        const payload = { ...env, error: { ...env.error, exit_code: 125 } };
         emit("new", payload, flags);
         process.exit(exitCodeFor(payload));
       }
@@ -125,7 +152,9 @@ const inputSetCmd = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const flags = readFlags(args as Record<string, unknown>);
+    const argMap = args as Record<string, unknown>;
+    const flags = readFlags(argMap);
+    if (maybeEmitDescribe("input.set", argMap, flags)) return;
     const payload = notImplemented("input set", "E");
     emit("new", payload, flags);
     process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
@@ -168,7 +197,9 @@ const deployAndroidKeystoreSetCmd = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const flags = readFlags(args as Record<string, unknown>);
+    const argMap = args as Record<string, unknown>;
+    const flags = readFlags(argMap);
+    if (maybeEmitDescribe("deploy.android.keystore.set", argMap, flags)) return;
     const payload = notImplemented("deploy android keystore set", "E");
     emit("new", payload, flags);
     process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
@@ -213,7 +244,9 @@ const scriptingSetCmd = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const flags = readFlags(args as Record<string, unknown>);
+    const argMap = args as Record<string, unknown>;
+    const flags = readFlags(argMap);
+    if (maybeEmitDescribe("scripting.set", argMap, flags)) return;
     const payload = notImplemented("scripting set", "E");
     emit("new", payload, flags);
     process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
@@ -252,7 +285,9 @@ const settingsRawSetCmd = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const flags = readFlags(args as Record<string, unknown>);
+    const argMap = args as Record<string, unknown>;
+    const flags = readFlags(argMap);
+    if (maybeEmitDescribe("settings.raw-set", argMap, flags)) return;
     const payload = notImplemented("settings raw-set", "E");
     emit("new", payload, flags);
     process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
@@ -286,7 +321,9 @@ const waitCmd = defineCommand({
     },
   },
   run: async ({ args }) => {
-    const flags = readFlags(args as Record<string, unknown>);
+    const argMap = args as Record<string, unknown>;
+    const flags = readFlags(argMap);
+    if (maybeEmitDescribe("wait", argMap, flags)) return;
     const payload = notImplemented("wait", "D");
     emit("new", payload, flags);
     process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));

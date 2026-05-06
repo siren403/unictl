@@ -368,6 +368,22 @@
       "hint_text": "Test results XML could not be saved. Check that --results path is writable.",
       "hint_command": "unictl test --platform editmode --results <writable_path>",
       "since_version": "0.6.0"
+    },
+    {
+      "kind": "not_implemented",
+      "emitted_from": ["cli"],
+      "exit_code": 78,
+      "hint_text": "This command is a Phase C skeleton stub; functional implementation arrives in Phase D or E. Track progress on issue siren403/unictl#7.",
+      "hint_command": "unictl command list",
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "editor_reload_active",
+      "emitted_from": ["cli", "editor_lane"],
+      "exit_code": 3,
+      "hint_text": "Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7.",
+      "hint_command": "unictl wait reachable",
+      "since_version": "0.7.0"
     }
   ]
 }

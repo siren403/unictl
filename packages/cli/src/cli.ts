@@ -10,6 +10,7 @@ import { runCompile } from "./compile";
 import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
+import { describeAll } from "./describe";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
   buildGitPackageReference,
@@ -570,6 +571,29 @@ const compileCmd = defineCommand({
   },
 });
 
+// v0.6 → v0.7 verb-noun migration hints. When a user invokes the legacy
+// `unictl command <tool> -p action=<act>` shape that has a v0.7 equivalent,
+// emit a one-line deprecation suggestion on stderr (does not change behavior).
+//
+// Per critic 4.0 + C-mapping: this is the gentle lane. Hard removal of the
+// legacy `command` verb is scheduled for v1.0; until then both work.
+function suggestV07Mapping(toolName: string, params: Record<string, unknown>): string | null {
+  if (toolName === "list") {
+    return "unictl describe-all  # canonical v0.7 metadata for all verb-noun commands";
+  }
+  if (toolName === "editor_control") {
+    const action = typeof params.action === "string" ? params.action : null;
+    switch (action) {
+      case "play":     return "unictl editor play";
+      case "stop":     return "unictl editor stop";
+      case "compile":  return "unictl editor compile";
+      case "refresh":  return "unictl editor refresh";
+      default:         return null;
+    }
+  }
+  return null;
+}
+
 const commandCmd = defineCommand({
   meta: {
     name: "command",
@@ -594,10 +618,26 @@ const commandCmd = defineCommand({
     try {
       const toolName = args.tool ? String(args.tool) : "list";
       const params = await resolveParams(rawArgs);
+      const suggestion = suggestV07Mapping(toolName, params ?? {});
+      if (suggestion) {
+        process.stderr.write(
+          `[deprecated] 'unictl command ${toolName}' has a v0.7 equivalent: ${suggestion}\n`,
+        );
+      }
       output(await command(toolName, params, { project: args.project }));
     } catch (error) {
       outputErrorAndExit(error);
     }
+  },
+});
+
+const describeAllCmd = defineCommand({
+  meta: {
+    name: "describe-all",
+    description: "Emit canonical agent metadata (DescribeMetadata) for every v0.7 verb-noun command as one JSON document.",
+  },
+  run: async () => {
+    console.log(JSON.stringify(describeAll()));
   },
 });
 
@@ -743,6 +783,7 @@ QUICK START (run in order):
     capabilities: capabilitiesCmd,
     compile: compileCmd,
     command: commandCmd,
+    "describe-all": describeAllCmd,
     doctor: doctorCmd,
     editor: editorCmd,
     health: healthCmd,

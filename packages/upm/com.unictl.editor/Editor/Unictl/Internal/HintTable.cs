@@ -30,6 +30,8 @@ namespace Unictl.Internal
             { "progress_read_failed",   "Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds." },
             { "test_timeout",           "Test run exceeded the wall-clock timeout. Increase --timeout or reduce test scope." },
             { "xml_save_failed",        "Test results XML could not be saved. Check that --results path is writable." },
+            { "not_implemented",        "This command is a Phase C skeleton stub; functional implementation arrives in Phase D or E. Track progress on issue siren403/unictl#7." },
+            { "editor_reload_active",   "Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;
