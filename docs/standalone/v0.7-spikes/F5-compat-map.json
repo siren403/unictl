@@ -1,0 +1,147 @@
+{
+  "schema_version": 1,
+  "generated_at": "2026-05-06",
+  "notes": "Every entry covers one discrete v0.6 invocation form. 'wrap-warn' means the old path stays functional and prints a deprecation warning to stderr once per process. Line numbers reference packages/cli/src/* at the time of this spike.",
+  "entries": [
+    {
+      "v06_invocation": "unictl build --target <T> [--output <O>] [--scenes <S>] [--define <D>] [--build-profile <P>] [--development] [--allow-debugging] [--wait] [--timeout <N>] [--batch] [--force-ipc] [--job-id <J>] [--project <P>]",
+      "v06_entry_point": "packages/cli/src/build.ts:108",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor build --target <T> [same flags]",
+      "notes": "Top-level 'build' verb moves under 'editor' noun in v0.7. All flags carry over unchanged. Deprecation warning: 'unictl build is deprecated; use unictl editor build'. Legacy entrypoint must stay functional until v1.0."
+    },
+    {
+      "v06_invocation": "unictl compile [--project <P>] [--timeout <N>] [--log-file <F>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:503",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor compile [--project <P>] [--timeout <N>] [--log-file <F>]",
+      "notes": "Top-level 'compile' verb moves under 'editor' noun. Flags are identical (--log-file normalised from --logFile by normalizeKnownFlags). Deprecation warning: 'unictl compile is deprecated; use unictl editor compile'."
+    },
+    {
+      "v06_invocation": "unictl editor status [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:407",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl editor status [--project <P>]",
+      "notes": "Already verb-noun shape. Path and flags are identical in v0.7. No shim needed."
+    },
+    {
+      "v06_invocation": "unictl editor quit [--project <P>] [--force]",
+      "v06_entry_point": "packages/cli/src/cli.ts:426",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl editor quit [--project <P>] [--force]",
+      "notes": "Already verb-noun shape. Path and flags are identical in v0.7. No shim needed."
+    },
+    {
+      "v06_invocation": "unictl editor open [--project <P>] [--skip-precompile]",
+      "v06_entry_point": "packages/cli/src/cli.ts:450",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl editor open [--project <P>] [--skip-precompile]",
+      "notes": "Already verb-noun shape. --skip-precompile is normalised from --skipPrecompile by normalizeKnownFlags (cli.ts:386). Unchanged in v0.7."
+    },
+    {
+      "v06_invocation": "unictl editor restart [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:474",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl editor restart [--project <P>]",
+      "notes": "Already verb-noun shape. Path and flags are identical in v0.7. No shim needed."
+    },
+    {
+      "v06_invocation": "unictl command <tool> -p key=value [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl tool invoke <tool> -p key=value [--project <P>]",
+      "notes": "Generic tool dispatch. v0.7 renames to 'tool invoke' (noun=tool, verb=invoke) so the low-level escape hatch is explicit. The -p / @file / stdin param resolution chain is preserved. Deprecation warning: 'unictl command is deprecated; use unictl tool invoke'. The special sentinel 'unictl command list' maps to 'unictl tool list'. See list entry below."
+    },
+    {
+      "v06_invocation": "unictl command list",
+      "v06_entry_point": "packages/cli/src/cli.ts:586",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl tool list",
+      "notes": "When 'unictl command' is called with no tool argument (or tool='list'), it lists all registered UnictlTools. v0.7 surfaces this as 'unictl tool list'. Covered by the same wrap-warn shim on 'unictl command'. Deprecation warning points to 'unictl tool list'."
+    },
+    {
+      "v06_invocation": "unictl command editor_control -p action=status [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor status [--project <P>]",
+      "notes": "High-frequency agent invocation. Routed through 'unictl command' shim. v0.7 agents should use 'unictl editor status' directly. Wrap-warn shim on 'unictl command' covers this; no separate shim entry required in C8 code, but migration guide (F1) must call out this mapping explicitly."
+    },
+    {
+      "v06_invocation": "unictl command editor_control -p action=play [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor play [--project <P>]",
+      "notes": "v0.7 surfaces play-mode entry as 'unictl editor play'. The wrap-warn on 'unictl command' covers this call site. F1 migration guide must list action=play -> editor play."
+    },
+    {
+      "v06_invocation": "unictl command editor_control -p action=stop [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor stop [--project <P>]",
+      "notes": "v0.7 surfaces play-mode exit as 'unictl editor stop'. Covered by wrap-warn on 'unictl command'."
+    },
+    {
+      "v06_invocation": "unictl command editor_control -p action=refresh [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor refresh [--project <P>]",
+      "notes": "Asset database refresh action. v0.7 promotes to first-class 'unictl editor refresh'. Covered by wrap-warn on 'unictl command'. Also referenced in compile.ts error hint text (line 42)."
+    },
+    {
+      "v06_invocation": "unictl command editor_control -p action=compile [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:566",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor compile [--project <P>]",
+      "notes": "In-editor compile trigger via IPC (distinct from headless 'unictl compile' batchmode). v0.7 equivalent is 'unictl editor compile' (IPC lane). The wrap-warn on 'unictl command' covers this."
+    },
+    {
+      "v06_invocation": "unictl health [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:597",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl editor health [--project <P>]",
+      "notes": "Top-level 'health' verb moves under 'editor' noun in v0.7 for consistency. Deprecation warning: 'unictl health is deprecated; use unictl editor health'. Low-risk shim: single flag, no output shape change."
+    },
+    {
+      "v06_invocation": "unictl doctor [--project <P>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:636",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl doctor [--project <P>]",
+      "notes": "Doctor is a cross-cutting diagnostic, not scoped to a single noun. Stays top-level in v0.7. No shim needed."
+    },
+    {
+      "v06_invocation": "unictl init [--project <P>] [--repo-url <U>] [--package-ref <R>] [--version <V>] [--head] [--dry-run] [--force]",
+      "v06_entry_point": "packages/cli/src/cli.ts:660",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl init [same flags]",
+      "notes": "Package manifest installer. Stays top-level in v0.7; it targets the Unity project manifest, not the running editor, so it does not naturally belong under any single noun group. Flags --dry-run, --repo-url, --package-ref, --skip-precompile are normalised by normalizeKnownFlags (cli.ts:386). No shim needed."
+    },
+    {
+      "v06_invocation": "unictl version",
+      "v06_entry_point": "packages/cli/src/cli.ts:614",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl version",
+      "notes": "Version metadata query. Stays top-level in v0.7. No shim needed."
+    },
+    {
+      "v06_invocation": "unictl capabilities",
+      "v06_entry_point": "packages/cli/src/cli.ts:625",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl tool capabilities",
+      "notes": "Offline agent-discovery JSON. v0.7 moves this under 'tool' noun alongside 'tool list' and 'tool invoke'. Deprecation warning: 'unictl capabilities is deprecated; use unictl tool capabilities'. Output shape unchanged."
+    },
+    {
+      "v06_invocation": "unictl test [--platform <P>] [--results <F>] [--filter <F>] [--timeout <N>] [--batch] [--editor-version <V>] [--project <P>] [--allow-unsaved-scenes] [--allow-reload-active]",
+      "v06_entry_point": "packages/cli/src/test.ts:433",
+      "disposition": "unchanged",
+      "v07_equivalent": "unictl test [same flags]",
+      "notes": "Test runner stays top-level in v0.7. The v0.7 plan Phase D explicitly lists 'test editmode' and 'test playmode' as --wait targets, implying 'unictl test' is the stable noun. The --platform flag already carries the sub-mode distinction. No shim needed. Note: --allow-unsaved-scenes and --allow-reload-active are editor-lane-only flags; they are no-ops in batchmode. This footgun should be called out in F1 migration guide."
+    },
+    {
+      "v06_invocation": "unictl --help --json [<subcommand>]",
+      "v06_entry_point": "packages/cli/src/cli.ts:752",
+      "disposition": "wrap-warn",
+      "v07_equivalent": "unictl <noun> <verb> --describe",
+      "notes": "Per v0.7 plan C1/C7 and plan cross-phase note: '--help --json' is documented as an alias for '--describe' in v0.7 and scheduled for removal in v1.0. The intercept block at cli.ts:752-791 is the current implementation. In v0.7 it should emit a deprecation warning and delegate to --describe. F1 migration guide must call this out prominently."
+    }
+  ]
+}
