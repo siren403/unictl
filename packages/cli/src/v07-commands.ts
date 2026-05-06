@@ -105,23 +105,139 @@ function notImplemented(verb: string, plannedPhase: string, related: readonly st
 
 // ---------------------------------------------------------------------------
 // editor.compile / play / stop / refresh — functional via editor_control IPC
+// Phase F: --wait <state> + --timeout integration. After IPC dispatch,
+// optionally pull /liveness until the target state is reached.
 // ---------------------------------------------------------------------------
+
+/** F.3 default wait state per editor sub-action (when --wait has no value). */
+const EDITOR_DEFAULT_WAIT_STATE: Record<string, WaitState> = {
+  compile: "idle",
+  play: "playing",
+  stop: "idle",
+  refresh: "idle",
+};
 
 function makeEditorActionCommand(action: string, summary: string) {
   return defineCommand({
     meta: { name: action, description: summary },
-    args: { ...v07GlobalArgs },
-    run: async ({ args }) => {
+    args: {
+      ...v07GlobalArgs,
+      wait: {
+        type: "string",
+        description: `Wait for editor state after dispatch. Pass a state name (idle | playing | compiling | reloading | reachable) to override the F.3 default ('${EDITOR_DEFAULT_WAIT_STATE[action]}'). Omit for fire-and-forget.`,
+      },
+      timeout: {
+        type: "string",
+        description: "Wait timeout (e.g. 30s, 2m, 1h, 120, or 0 unbounded). Default per F.3 matrix.",
+      },
+    },
+    run: async ({ args, rawArgs }) => {
       const argMap = args as Record<string, unknown>;
       const flags = readFlags(argMap);
       if (maybeEmitDescribe(`editor.${action}`, argMap, flags)) return;
+
+      // citty's string arg requires a value, so `--wait --timeout` consumes
+      // `--timeout` as the wait value. Detect that case and fall back to the
+      // F.3 verb-default state.
+      const waitFlagIdx = rawArgs.indexOf("--wait");
+      const waitNext = waitFlagIdx >= 0 ? rawArgs[waitFlagIdx + 1] : undefined;
+      const waitNextIsFlag = typeof waitNext === "string" && waitNext.startsWith("--");
+      let waitTarget: WaitState | null = null;
+
+      if (waitFlagIdx >= 0 && (waitNext === undefined || waitNextIsFlag)) {
+        // `--wait` alone (or followed by another flag): use verb default.
+        waitTarget = EDITOR_DEFAULT_WAIT_STATE[action] ?? "idle";
+      } else if (typeof args.wait === "string" && args.wait.length > 0) {
+        if (!WAIT_STATES.includes(args.wait as WaitState)) {
+          const env = errorEnvelope({
+            kind: "invalid_param",
+            message: `Unknown wait state '${args.wait}'. Valid: ${WAIT_STATES.join(", ")}.`,
+            related: [`editor.${action}`, "wait"],
+            context: { state: args.wait, valid_states: WAIT_STATES },
+          });
+          const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+          emit("new", payload, flags);
+          process.exit(exitCodeFor(payload));
+        }
+        waitTarget = args.wait as WaitState;
+      }
+
+      // Resolve --timeout. citty may have lost it to --wait (when --wait was
+      // alone followed by --timeout); probe rawArgs for the canonical form.
+      let timeoutRaw = args.timeout as string | undefined;
+      if (timeoutRaw === undefined) {
+        const idx = rawArgs.indexOf("--timeout");
+        if (idx >= 0 && idx + 1 < rawArgs.length && !rawArgs[idx + 1].startsWith("--")) {
+          timeoutRaw = rawArgs[idx + 1];
+        }
+      }
+      let timeoutSeconds = 0;
+      if (waitTarget !== null) {
+        if (timeoutRaw !== undefined) {
+          const parsed = parseDuration(timeoutRaw);
+          if (Number.isNaN(parsed)) {
+            const env = errorEnvelope({
+              kind: "invalid_param",
+              message: `Cannot parse --timeout '${timeoutRaw}'. Expected forms: 30s, 2m, 1h, bare integer, or 0.`,
+              related: [`editor.${action}`, "wait"],
+              context: { timeout_raw: timeoutRaw },
+            });
+            const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+            emit("new", payload, flags);
+            process.exit(exitCodeFor(payload));
+          }
+          timeoutSeconds = parsed;
+        } else {
+          timeoutSeconds = lookupTimeoutDefault(`editor.${action}`, waitTarget);
+        }
+      }
+
       try {
         const result = await ipcCommand(
           "editor_control",
           { action },
           { project: args.project as string | undefined },
         );
-        const payload = { ok: true, action, result };
+
+        if (waitTarget === null) {
+          // Fire-and-forget — return immediately as before.
+          const payload = { ok: true, action, result };
+          emit("new", payload, flags);
+          process.exit(0);
+        }
+
+        // --wait engaged: pull /liveness until target state is reached.
+        const outcome = await runWait({
+          state: waitTarget,
+          timeoutSeconds,
+          project: args.project as string | undefined,
+        });
+        const waitEnv = outcomeToEnvelope(outcome);
+        if (waitEnv.ok) {
+          const payload = {
+            ok: true,
+            action,
+            result,
+            wait: {
+              state: waitEnv.state,
+              phase: waitEnv.phase,
+              alive_ms_ago: waitEnv.alive_ms_ago,
+              elapsed_ms: waitEnv.elapsed_ms,
+            },
+          };
+          emit("new", payload, flags);
+          process.exit(0);
+        }
+        // Wait failed — surface its envelope but keep the IPC result for
+        // diagnostics. Exit code comes from the wait failure.
+        const payload = {
+          ok: false,
+          action,
+          result,
+          state: waitEnv.state,
+          elapsed_ms: waitEnv.elapsed_ms,
+          error: waitEnv.error,
+        };
         emit("new", payload, flags);
         process.exit(exitCodeFor(payload));
       } catch (err) {

@@ -68,6 +68,28 @@ const COMMON_ARGS: readonly DescribeArg[] = [
   },
 ];
 
+/**
+ * Phase F: editor sub-verbs accept --wait <state> + --timeout <dur> on top
+ * of COMMON_ARGS. State is optional — omitting it uses the verb-specific
+ * F.3 default (compile/refresh/stop → idle, play → playing).
+ */
+const EDITOR_WAIT_ARGS: readonly DescribeArg[] = [
+  {
+    name: "wait",
+    type: "enum",
+    enumValues: ["idle", "playing", "compiling", "reloading", "reachable"],
+    required: false,
+    description: "Wait for editor state after dispatch (uses F.3 verb default if no value).",
+  },
+  {
+    name: "timeout",
+    type: "duration",
+    default: "auto",
+    required: false,
+    description: "Wait timeout (e.g. 30s, 2m, 1h, 0 unbounded). Default per F.3 matrix.",
+  },
+];
+
 const COMMON_EXIT_CODES: readonly number[] = [0, 1, 2, 78, 124, 125, 126];
 
 export const v07Describes: Record<string, DescribeMetadata> = {
@@ -85,13 +107,14 @@ export const v07Describes: Record<string, DescribeMetadata> = {
       "Editor is not running — use 'unictl compile' (batchmode) instead.",
       "You need a clean clean compile from a known-empty state — use 'unictl compile' which can spawn a fresh batchmode process.",
     ],
-    args: COMMON_ARGS,
+    args: [...COMMON_ARGS, ...EDITOR_WAIT_ARGS],
     examples: [
-      { cmd: "unictl editor compile", intent: "trigger in-editor recompile" },
+      { cmd: "unictl editor compile", intent: "trigger in-editor recompile (fire-and-forget)" },
+      { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and block until editor returns to idle" },
       { cmd: "unictl editor compile --no-json", intent: "human-readable output" },
     ],
-    exit_codes: COMMON_EXIT_CODES,
-    related: ["editor.refresh", "editor.status"],
+    exit_codes: [0, 2, 3, 124, 125, 130],
+    related: ["editor.refresh", "editor.status", "wait"],
     since_version: SINCE,
     stability: "beta",
   },
@@ -109,11 +132,12 @@ export const v07Describes: Record<string, DescribeMetadata> = {
       "Editor is currently compiling or importing — call 'unictl wait idle' first (Phase D).",
       "Headless test runs — use 'unictl test playmode --batch' instead.",
     ],
-    args: COMMON_ARGS,
+    args: [...COMMON_ARGS, ...EDITOR_WAIT_ARGS],
     examples: [
-      { cmd: "unictl editor play", intent: "enter Play mode" },
+      { cmd: "unictl editor play --wait playing --timeout 30s", intent: "enter Play mode and block until live (default state: playing)" },
+      { cmd: "unictl editor play", intent: "enter Play mode (fire-and-forget)" },
     ],
-    exit_codes: COMMON_EXIT_CODES,
+    exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.stop", "editor.status", "wait"],
     since_version: SINCE,
     stability: "beta",
@@ -131,12 +155,13 @@ export const v07Describes: Record<string, DescribeMetadata> = {
     when_not: [
       "Editor is in a compile/reload window — wait for idle first.",
     ],
-    args: COMMON_ARGS,
+    args: [...COMMON_ARGS, ...EDITOR_WAIT_ARGS],
     examples: [
-      { cmd: "unictl editor stop", intent: "exit Play mode" },
+      { cmd: "unictl editor stop --wait idle --timeout 30s", intent: "exit Play mode and block until idle (covers reload window)" },
+      { cmd: "unictl editor stop", intent: "exit Play mode (fire-and-forget)" },
     ],
-    exit_codes: COMMON_EXIT_CODES,
-    related: ["editor.play", "editor.status"],
+    exit_codes: [0, 2, 3, 124, 125, 130],
+    related: ["editor.play", "editor.status", "wait"],
     since_version: SINCE,
     stability: "beta",
   },
@@ -153,12 +178,13 @@ export const v07Describes: Record<string, DescribeMetadata> = {
     when_not: [
       "Editor is currently importing — duplicate refresh has no benefit.",
     ],
-    args: COMMON_ARGS,
+    args: [...COMMON_ARGS, ...EDITOR_WAIT_ARGS],
     examples: [
-      { cmd: "unictl editor refresh", intent: "re-import changed assets" },
+      { cmd: "unictl editor refresh --wait idle --timeout 90s", intent: "trigger refresh and block until import settles to idle" },
+      { cmd: "unictl editor refresh", intent: "re-import changed assets (fire-and-forget)" },
     ],
-    exit_codes: COMMON_EXIT_CODES,
-    related: ["editor.compile", "editor.status"],
+    exit_codes: [0, 2, 3, 124, 125, 130],
+    related: ["editor.compile", "editor.status", "wait"],
     since_version: SINCE,
     stability: "beta",
   },
