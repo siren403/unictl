@@ -65,6 +65,13 @@
 
     { "kind": "project_locked",                   "code": 24576,  "hex": "0x6000" },
     { "kind": "progress_read_failed",             "code": 24577,  "hex": "0x6001" },
-    { "kind": "job_not_found",                    "code": 24578,  "hex": "0x6002" }
+    { "kind": "job_not_found",                    "code": 24578,  "hex": "0x6002" },
+    { "kind": "project_root_invalid",             "code": 24579,  "hex": "0x6003" },
+
+    { "kind": "setting_key_not_found",            "code": 28672,  "hex": "0x7000" },
+    { "kind": "confirmation_required",            "code": 28673,  "hex": "0x7001" },
+    { "kind": "secret_required",                  "code": 28674,  "hex": "0x7002" },
+
+    { "kind": "keystore_path_not_found",          "code": 32768,  "hex": "0x8000" }
   ]
 }

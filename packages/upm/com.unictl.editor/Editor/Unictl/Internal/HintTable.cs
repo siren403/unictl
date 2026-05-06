@@ -35,6 +35,11 @@ namespace Unictl.Internal
             { "wait_timeout",           "Wait budget exhausted before target state was reached. Raise --timeout or check editor health with 'unictl health'." },
             { "interrupted",            "SIGINT received during wait; the command was cancelled before the target state was reached." },
             { "editor_unresponsive",    "Editor heartbeat is stale past the A4 reload ceiling. The process may be hung; consider 'unictl editor restart'." },
+            { "project_root_invalid",   "Could not resolve a Unity project root. Pass --project <path-to-project-root> or run from a Unity project directory." },
+            { "setting_key_not_found",  "Top-level scalar key not found in ProjectSettings.asset. Inspect the file or use a feature bundle (input/scripting/deploy)." },
+            { "confirmation_required",  "settings raw-set requires --no-warranty to acknowledge that raw edits bypass Unity setter side effects." },
+            { "keystore_path_not_found","Keystore file not found at the resolved --path. Verify the file exists and the path is correct." },
+            { "secret_required",        "Keystore and key passwords are required. Pass --keystore-pass / --key-pass or pipe via stdin. Passwords are never logged or echoed." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;

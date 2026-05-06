@@ -27,6 +27,17 @@ import {
   runWait,
   outcomeToEnvelope,
 } from "./wait";
+import {
+  loadProjectSettings,
+  saveProjectSettings,
+  setTopLevelScalar,
+  setNestedScalar,
+  getTopLevelScalar,
+  resolvePlatformYamlKey,
+} from "./project-settings";
+import { requireEditorClosed } from "./settings";
+import { existsSync } from "node:fs";
+import { resolve as resolvePath } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Shared flag / response helpers
@@ -163,9 +174,57 @@ const inputSetCmd = defineCommand({
     const argMap = args as Record<string, unknown>;
     const flags = readFlags(argMap);
     if (maybeEmitDescribe("input.set", argMap, flags)) return;
-    const payload = notImplemented("input set", "E");
-    emit("new", payload, flags);
-    process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
+
+    const handler = String(args.handler).trim().toLowerCase();
+    const handlerCode: Record<string, number> = { legacy: 0, new: 1, both: 2 };
+    if (!(handler in handlerCode)) {
+      const env = errorEnvelope({
+        kind: "invalid_param",
+        message: `Unknown input handler '${handler}'. Valid: legacy, new, both.`,
+        related: ["input.set"],
+        context: { handler, valid: ["legacy", "new", "both"] },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    const pre = await requireEditorClosed({
+      project: args.project as string | undefined,
+      restart: args.restart === true,
+      intent: "input set",
+    });
+    if (!pre.ok) {
+      emit("new", pre.envelope, flags);
+      process.exit(exitCodeFor(pre.envelope));
+    }
+
+    try {
+      const content = loadProjectSettings(pre.projectRoot);
+      const updated = setTopLevelScalar(content, "activeInputHandler", String(handlerCode[handler]));
+      saveProjectSettings(pre.projectRoot, updated);
+      const payload = {
+        ok: true,
+        action: "input.set",
+        applied: { handler, value: handlerCode[handler] },
+        project_root: pre.projectRoot,
+      };
+      emit("new", payload, flags);
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = (err as { kind?: string })?.kind ?? "ipc_error";
+      const env = errorEnvelope({
+        kind,
+        message,
+        recovery: "Run 'unictl doctor' for diagnostics.",
+        related: ["doctor", "input.set"],
+        context: { intent: "input set" },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: kind === "setting_key_not_found" ? 2 : 125 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
   },
 });
 
@@ -181,36 +240,91 @@ const inputCmd = defineCommand({
 const deployAndroidKeystoreSetCmd = defineCommand({
   meta: {
     name: "set",
-    description: "Configure Android keystore credentials for the project.",
+    description: "Configure Android keystore path + alias in ProjectSettings.asset and enable custom keystore. Passwords NOT persisted (supply at build via env vars).",
   },
   args: {
     ...v07GlobalArgs,
     path: {
       type: "string",
       required: true,
-      description: "Keystore file path",
+      description: "Keystore file path (relative to project root or absolute)",
     },
     alias: {
       type: "string",
       required: true,
       description: "Key alias",
     },
-    keystorePass: {
-      type: "string",
-      description: "Keystore password (stdin if omitted)",
-    },
-    keyPass: {
-      type: "string",
-      description: "Key password (stdin if omitted)",
-    },
   },
   run: async ({ args }) => {
     const argMap = args as Record<string, unknown>;
     const flags = readFlags(argMap);
     if (maybeEmitDescribe("deploy.android.keystore.set", argMap, flags)) return;
-    const payload = notImplemented("deploy android keystore set", "E");
-    emit("new", payload, flags);
-    process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
+
+    const path = String(args.path);
+    const alias = String(args.alias);
+
+    const pre = await requireEditorClosed({
+      project: args.project as string | undefined,
+      intent: "deploy android keystore set",
+    });
+    if (!pre.ok) {
+      emit("new", pre.envelope, flags);
+      process.exit(exitCodeFor(pre.envelope));
+    }
+
+    const resolvedKeystore = resolvePath(pre.projectRoot, path);
+    if (!existsSync(resolvedKeystore)) {
+      const env = errorEnvelope({
+        kind: "keystore_path_not_found",
+        message: `Keystore file not found at '${resolvedKeystore}'.`,
+        recovery: "Verify --path resolves to an existing .keystore/.jks file.",
+        related: ["deploy.android.keystore.set"],
+        context: { path, resolved: resolvedKeystore },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    try {
+      let content = loadProjectSettings(pre.projectRoot);
+      const normalizedPath = resolvedKeystore.replace(/\\/g, "/");
+      content = setTopLevelScalar(content, "AndroidKeystoreName", normalizedPath);
+      content = setTopLevelScalar(content, "AndroidKeyaliasName", alias);
+      content = setTopLevelScalar(content, "androidUseCustomKeystore", "1");
+      saveProjectSettings(pre.projectRoot, content);
+
+      const payload = {
+        ok: true,
+        action: "deploy.android.keystore.set",
+        applied: {
+          path: normalizedPath,
+          alias,
+          android_use_custom_keystore: 1,
+        },
+        notes: [
+          "Passwords are intentionally NOT written to ProjectSettings.asset (committed file).",
+          "Supply at build time via UNITY_ANDROID_KEYSTORE_PASS / UNITY_ANDROID_KEYALIAS_PASS env vars,",
+          "or via -keystorePass / -keyaliasPass arguments to a Unity batchmode build.",
+        ],
+        project_root: pre.projectRoot,
+      };
+      emit("new", payload, flags);
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = (err as { kind?: string })?.kind ?? "ipc_error";
+      const env = errorEnvelope({
+        kind,
+        message,
+        recovery: "Run 'unictl doctor' for diagnostics.",
+        related: ["doctor", "deploy.android.keystore.set"],
+        context: { intent: "deploy android keystore set" },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: kind === "setting_key_not_found" ? 2 : 125 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
   },
 });
 
@@ -255,9 +369,69 @@ const scriptingSetCmd = defineCommand({
     const argMap = args as Record<string, unknown>;
     const flags = readFlags(argMap);
     if (maybeEmitDescribe("scripting.set", argMap, flags)) return;
-    const payload = notImplemented("scripting set", "E");
-    emit("new", payload, flags);
-    process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
+
+    const backend = String(args.backend).trim().toLowerCase();
+    const backendCode: Record<string, number> = { mono: 0, mono2x: 0, "mono-2x": 0, il2cpp: 1 };
+    if (!(backend in backendCode)) {
+      const env = errorEnvelope({
+        kind: "invalid_param",
+        message: `Unknown scripting backend '${backend}'. Valid: mono, il2cpp.`,
+        related: ["scripting.set"],
+        context: { backend, valid: ["mono", "il2cpp"] },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    const platformYaml = resolvePlatformYamlKey(String(args.platform));
+    if (!platformYaml) {
+      const env = errorEnvelope({
+        kind: "target_unsupported",
+        message: `Unknown platform '${args.platform}'. See 'unictl scripting set --describe'.`,
+        related: ["scripting.set"],
+        context: { platform: args.platform },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    const pre = await requireEditorClosed({
+      project: args.project as string | undefined,
+      intent: "scripting set",
+    });
+    if (!pre.ok) {
+      emit("new", pre.envelope, flags);
+      process.exit(exitCodeFor(pre.envelope));
+    }
+
+    try {
+      const content = loadProjectSettings(pre.projectRoot);
+      const updated = setNestedScalar(content, "scriptingBackend", platformYaml, String(backendCode[backend]));
+      saveProjectSettings(pre.projectRoot, updated);
+      const payload = {
+        ok: true,
+        action: "scripting.set",
+        applied: { backend, platform: platformYaml, value: backendCode[backend] },
+        project_root: pre.projectRoot,
+      };
+      emit("new", payload, flags);
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = (err as { kind?: string })?.kind ?? "ipc_error";
+      const env = errorEnvelope({
+        kind,
+        message,
+        recovery: "Run 'unictl doctor' for diagnostics.",
+        related: ["doctor", "scripting.set"],
+        context: { intent: "scripting set", platform: platformYaml },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: kind === "setting_key_not_found" ? 2 : 125 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
   },
 });
 
@@ -287,18 +461,84 @@ const settingsRawSetCmd = defineCommand({
       required: true,
       description: "New value (string-typed)",
     },
-    "no-warranty": {
-      type: "boolean",
-      description: "Required acknowledgment that raw edits bypass Unity setter side effects",
-    },
   },
-  run: async ({ args }) => {
+  run: async ({ args, rawArgs }) => {
     const argMap = args as Record<string, unknown>;
     const flags = readFlags(argMap);
     if (maybeEmitDescribe("settings.raw-set", argMap, flags)) return;
-    const payload = notImplemented("settings raw-set", "E");
-    emit("new", payload, flags);
-    process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
+
+    // citty/mri treats `--no-foo` as boolean negation of a `foo` arg, so we
+    // can't define "no-warranty" via the args schema. Probe rawArgs directly
+    // to keep the documented `--no-warranty` flag UX intact.
+    const hasNoWarranty = rawArgs.includes("--no-warranty");
+    if (!hasNoWarranty) {
+      const env = errorEnvelope({
+        kind: "confirmation_required",
+        message: "settings raw-set requires --no-warranty to acknowledge that raw edits bypass Unity setter side effects.",
+        recovery: "Add --no-warranty if you understand the risks. Prefer feature bundles (input set, scripting set, deploy keystore set) when one fits.",
+        related: ["input.set", "scripting.set", "deploy.android.keystore.set"],
+        context: { key: args.key, hint: "feature_bundles_first" },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    const key = String(args.key);
+    const value = String(args.value);
+
+    // Reject dotted paths in v1 — nested edits go through feature bundles.
+    if (key.includes(".") || key.includes("/")) {
+      const env = errorEnvelope({
+        kind: "invalid_param",
+        message: "settings raw-set v1 only accepts top-level keys; dotted/nested paths are not supported.",
+        recovery: "Use the matching feature bundle (e.g. 'unictl scripting set ... --platform Android') for nested keys.",
+        related: ["scripting.set"],
+        context: { key },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    const pre = await requireEditorClosed({
+      project: args.project as string | undefined,
+      intent: "settings raw-set",
+    });
+    if (!pre.ok) {
+      emit("new", pre.envelope, flags);
+      process.exit(exitCodeFor(pre.envelope));
+    }
+
+    try {
+      const content = loadProjectSettings(pre.projectRoot);
+      const previous = getTopLevelScalar(content, key);
+      const updated = setTopLevelScalar(content, key, value);
+      saveProjectSettings(pre.projectRoot, updated);
+      const payload = {
+        ok: true,
+        action: "settings.raw-set",
+        applied: { key, value, previous },
+        project_root: pre.projectRoot,
+      };
+      emit("new", payload, flags);
+      process.exit(0);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      const kind = (err as { kind?: string })?.kind ?? "ipc_error";
+      const env = errorEnvelope({
+        kind,
+        message,
+        recovery: kind === "setting_key_not_found"
+          ? `Key '${key}' is not a top-level scalar in ProjectSettings.asset. Inspect the file or use a feature bundle.`
+          : "Run 'unictl doctor' for diagnostics.",
+        related: ["doctor", "settings.raw-set"],
+        context: { intent: "settings raw-set", key },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: kind === "setting_key_not_found" ? 2 : 125 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
   },
 });
 

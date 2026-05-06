@@ -408,6 +408,46 @@
       "hint_text": "Editor heartbeat is stale past the A4 reload ceiling. Check editor logs and consider 'unictl editor restart'.",
       "hint_command": "unictl editor restart",
       "since_version": "0.7.0"
+    },
+    {
+      "kind": "project_root_invalid",
+      "emitted_from": ["cli"],
+      "exit_code": 2,
+      "hint_text": "Could not resolve a Unity project root from --project or cwd. Pass --project <path-to-project-root>.",
+      "hint_command": "unictl doctor",
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "setting_key_not_found",
+      "emitted_from": ["cli"],
+      "exit_code": 2,
+      "hint_text": "Top-level scalar key not found in ProjectSettings.asset. Inspect the file or use a feature bundle (input set / scripting set / deploy keystore set).",
+      "hint_command": null,
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "confirmation_required",
+      "emitted_from": ["cli"],
+      "exit_code": 2,
+      "hint_text": "settings raw-set requires --no-warranty to acknowledge that raw edits bypass Unity setter side effects. Prefer feature bundles when one fits.",
+      "hint_command": null,
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "keystore_path_not_found",
+      "emitted_from": ["cli"],
+      "exit_code": 2,
+      "hint_text": "Keystore file not found at the resolved --path. Verify the file exists.",
+      "hint_command": null,
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "secret_required",
+      "emitted_from": ["cli"],
+      "exit_code": 2,
+      "hint_text": "Keystore and key passwords are required. Pass --keystore-pass / --key-pass or pipe via stdin. Passwords are never echoed or logged.",
+      "hint_command": null,
+      "since_version": "0.7.0"
     }
   ]
 }
