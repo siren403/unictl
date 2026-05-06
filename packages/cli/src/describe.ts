@@ -305,10 +305,10 @@ export const v07Describes: Record<string, DescribeMetadata> = {
       { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and wait for idle" },
       { cmd: "unictl wait reachable --timeout 5s", intent: "fast pipe-responsiveness probe" },
     ],
-    exit_codes: [0, 2, 78, 124, 125, 126],
+    exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.status", "editor.compile", "editor.play"],
     since_version: SINCE,
-    stability: "experimental",
+    stability: "beta",
   },
 };
 

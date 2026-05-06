@@ -384,6 +384,30 @@
       "hint_text": "Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7.",
       "hint_command": "unictl wait reachable",
       "since_version": "0.7.0"
+    },
+    {
+      "kind": "wait_timeout",
+      "emitted_from": ["cli"],
+      "exit_code": 124,
+      "hint_text": "Wait budget exhausted before the target state was reached. Verify editor health with 'unictl health' or raise --timeout. F.3 matrix lives in docs/standalone/v0.7-spikes/F3-wait-timeouts.md.",
+      "hint_command": "unictl wait reachable --timeout 2m",
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "interrupted",
+      "emitted_from": ["cli"],
+      "exit_code": 130,
+      "hint_text": "SIGINT (Ctrl+C) was received during a wait. Re-run if the cancellation was unintentional.",
+      "hint_command": null,
+      "since_version": "0.7.0"
+    },
+    {
+      "kind": "editor_unresponsive",
+      "emitted_from": ["cli"],
+      "exit_code": 3,
+      "hint_text": "Editor heartbeat is stale past the A4 reload ceiling. Check editor logs and consider 'unictl editor restart'.",
+      "hint_command": "unictl editor restart",
+      "since_version": "0.7.0"
     }
   ]
 }

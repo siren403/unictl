@@ -74,3 +74,20 @@ export async function command(
 export async function health(opts?: { project?: string }): Promise<unknown> {
   return requestJson("/health", undefined, opts);
 }
+
+/**
+ * Phase D: GET /liveness — used by `unictl wait` to poll editor phase.
+ *
+ * Returns the parsed JSON body on success, including the standard
+ *   { schema_version, alive_ms_ago, last_heartbeat_ms, last_state, pid,
+ *     handler_registered, phase_override, native_version }
+ * shape from format_liveness_response (lib.rs:74). On 503 reload windows
+ * the native side returns `{editor_reload_active: true, ...}` and the wait
+ * loop interprets that as `phase=reloading`.
+ *
+ * Throws when the endpoint is missing or the connection cannot be made;
+ * callers in the wait loop should catch and treat as `not_reachable`.
+ */
+export async function liveness(opts?: { project?: string }): Promise<unknown> {
+  return requestJson("/liveness", undefined, opts);
+}

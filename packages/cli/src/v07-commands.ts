@@ -19,6 +19,14 @@ import { command as ipcCommand } from "./client";
 import { emit, exitCodeFor, type OutputFlags } from "./output";
 import { lookupDescribe } from "./describe";
 import { errorEnvelope } from "./error";
+import {
+  WAIT_STATES,
+  type WaitState,
+  parseDuration,
+  lookupTimeoutDefault,
+  runWait,
+  outcomeToEnvelope,
+} from "./wait";
 
 // ---------------------------------------------------------------------------
 // Shared flag / response helpers
@@ -300,7 +308,7 @@ const settingsCmd = defineCommand({
 });
 
 // ---------------------------------------------------------------------------
-// wait <state> — Phase D stub
+// wait <state> — Phase D: pull-loop on /liveness with reload-aware re-arm
 // ---------------------------------------------------------------------------
 
 const waitCmd = defineCommand({
@@ -313,20 +321,64 @@ const waitCmd = defineCommand({
     state: {
       type: "positional",
       required: true,
-      description: "Target state",
+      description: "Target state (idle | playing | compiling | reloading | reachable)",
     },
     timeout: {
       type: "string",
-      description: "Timeout (e.g. 30s, 2m, 0 for unbounded)",
+      description: "Timeout (e.g. 30s, 2m, 1h, 120, or 0 for unbounded). Default per F.3 matrix.",
     },
   },
   run: async ({ args }) => {
     const argMap = args as Record<string, unknown>;
     const flags = readFlags(argMap);
     if (maybeEmitDescribe("wait", argMap, flags)) return;
-    const payload = notImplemented("wait", "D");
+
+    // Validate state.
+    const state = String(args.state);
+    if (!WAIT_STATES.includes(state as WaitState)) {
+      const env = errorEnvelope({
+        kind: "invalid_param",
+        message: `Unknown state '${state}'. Valid: ${WAIT_STATES.join(", ")}.`,
+        recovery: "Pass one of the supported states or 'unictl wait --describe' for details.",
+        related: ["wait"],
+        context: { state, valid_states: WAIT_STATES },
+      });
+      const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+      emit("new", payload, flags);
+      process.exit(exitCodeFor(payload));
+    }
+
+    // Resolve timeout: --timeout flag > env override > F.3 compiled default.
+    let timeoutSeconds: number;
+    const flagRaw = args.timeout as string | undefined;
+    if (flagRaw !== undefined) {
+      const parsed = parseDuration(flagRaw);
+      if (Number.isNaN(parsed)) {
+        const env = errorEnvelope({
+          kind: "invalid_param",
+          message: `Cannot parse --timeout '${flagRaw}'. Expected forms: 30s, 2m, 1h, bare integer (seconds), or 0 (unbounded).`,
+          recovery: "Pass a duration in the documented format.",
+          related: ["wait"],
+          context: { timeout_raw: flagRaw },
+        });
+        const payload = { ...env, error: { ...env.error, exit_code: 2 } };
+        emit("new", payload, flags);
+        process.exit(exitCodeFor(payload));
+      }
+      timeoutSeconds = parsed;
+    } else {
+      // Top-level `unictl wait` is its own verb in the matrix (no parent verb).
+      timeoutSeconds = lookupTimeoutDefault("wait", state as WaitState);
+    }
+
+    const outcome = await runWait({
+      state: state as WaitState,
+      timeoutSeconds,
+      project: args.project as string | undefined,
+    });
+    const payload = outcomeToEnvelope(outcome);
     emit("new", payload, flags);
-    process.exit(exitCodeFor(payload as { ok?: boolean; error?: { exit_code?: number } }));
+    process.exit(exitCodeFor(payload));
   },
 });
 

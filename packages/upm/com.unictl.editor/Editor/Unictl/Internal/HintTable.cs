@@ -32,6 +32,9 @@ namespace Unictl.Internal
             { "xml_save_failed",        "Test results XML could not be saved. Check that --results path is writable." },
             { "not_implemented",        "This command is a Phase C skeleton stub; functional implementation arrives in Phase D or E. Track progress on issue siren403/unictl#7." },
             { "editor_reload_active",   "Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7." },
+            { "wait_timeout",           "Wait budget exhausted before target state was reached. Raise --timeout or check editor health with 'unictl health'." },
+            { "interrupted",            "SIGINT received during wait; the command was cancelled before the target state was reached." },
+            { "editor_unresponsive",    "Editor heartbeat is stale past the A4 reload ceiling. The process may be hung; consider 'unictl editor restart'." },
         };
 
         public static string Get(string kind) => _hints.TryGetValue(kind, out var h) ? h : null;

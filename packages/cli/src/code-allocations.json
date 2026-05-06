@@ -17,6 +17,8 @@
   },
   "allocations": [
     { "kind": "timeout",                          "code": 1,      "hex": "0x0001" },
+    { "kind": "wait_timeout",                     "code": 2,      "hex": "0x0002" },
+    { "kind": "interrupted",                      "code": 3,      "hex": "0x0003" },
     { "kind": "invalid_param",                    "code": 16,     "hex": "0x0010" },
     { "kind": "target_unsupported",               "code": 17,     "hex": "0x0011" },
 
@@ -59,6 +61,7 @@
     { "kind": "heartbeat_native_unavailable",     "code": 20497,  "hex": "0x5011" },
     { "kind": "liveness_buffer_too_small",        "code": 20498,  "hex": "0x5012" },
     { "kind": "editor_reload_active",             "code": 20512,  "hex": "0x5020" },
+    { "kind": "editor_unresponsive",              "code": 20513,  "hex": "0x5021" },
 
     { "kind": "project_locked",                   "code": 24576,  "hex": "0x6000" },
     { "kind": "progress_read_failed",             "code": 24577,  "hex": "0x6001" },
