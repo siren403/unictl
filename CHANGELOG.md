@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.0] - 2026-05-06
+
 v0.7.0 lands the verb-noun command tree, native heartbeat ABI, runtime liveness
 descriptor, and lifecycle settings bundles. The legacy `unictl command` verb
 and `--help --json` alias remain functional but are deprecated; v1.0 will
