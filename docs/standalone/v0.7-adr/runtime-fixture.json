@@ -1,0 +1,15 @@
+{
+  "schema_version": 1,
+  "pid": 12345,
+  "started_at_ms": 1730800000000,
+  "project_root": "D:/workspace/unity/PickUpCat",
+  "transport": "pipe",
+  "pipe_path": "\\\\.\\pipe\\unictl-abc123def456",
+  "socket_path": null,
+  "native_version": "0.1.0",
+  "editor_package_version": "0.7.0",
+  "unity_version": "6000.4.1f1",
+  "session_id": "00000000-0000-0000-0000-000000000001",
+  "platform": "WindowsEditor",
+  "terminal_reason": "unknown"
+}
