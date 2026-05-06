@@ -9,6 +9,7 @@ import { buildCmd } from "./build";
 import { runCompile } from "./compile";
 import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
+import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
   buildGitPackageReference,
@@ -497,6 +498,12 @@ const editorCmd = defineCommand({
     quit: editorQuitCmd,
     open: editorOpenCmd,
     restart: editorRestartCmd,
+    // v0.7 verb-noun additions (Phase C-skeleton): in-editor IPC actions.
+    // Top-level `unictl compile` is batchmode; `unictl editor compile` is in-editor recompile.
+    compile: v07EditorSubCommands.compile,
+    play: v07EditorSubCommands.play,
+    stop: v07EditorSubCommands.stop,
+    refresh: v07EditorSubCommands.refresh,
   },
 });
 
@@ -742,6 +749,13 @@ QUICK START (run in order):
     init: initCmd,
     test: testCmd,
     version: versionCmd,
+    // v0.7 verb-noun additions (Phase C-skeleton). Stub bodies for now —
+    // wait wires in Phase D; input / deploy / scripting / settings wire in Phase E.
+    input: v07TopLevelCommands.input,
+    deploy: v07TopLevelCommands.deploy,
+    scripting: v07TopLevelCommands.scripting,
+    settings: v07TopLevelCommands.settings,
+    wait: v07TopLevelCommands.wait,
   },
 });
 
