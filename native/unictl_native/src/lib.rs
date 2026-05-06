@@ -1,9 +1,10 @@
 use std::collections::HashMap;
 use std::ffi::{CStr, CString};
 use std::os::raw::c_char;
-use std::sync::atomic::{AtomicBool, AtomicI32, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicI32, AtomicI64, Ordering};
 use std::sync::Mutex;
 use std::thread;
+use std::time::Instant;
 
 mod protocol;
 
@@ -30,12 +31,79 @@ static MAIN_QUEUE: Mutex<Vec<String>> = Mutex::new(Vec::new());
 // C# HttpListener 내부 포트 (main loop wake용)
 static INTERNAL_PORT: AtomicI32 = AtomicI32::new(0);
 
-// A2 stub: managed-side heartbeat sink. A3 will replace with a typed
-// `LivenessState` parsed via `serde_json` plus a monotonic `Instant` of
-// last receipt. For A2 we keep the most recently seen JSON payload as
-// an opaque string so the wire shape can be exercised end-to-end without
-// committing the receiver's struct layout. Per F.8: JSON-over-pipe only.
-static LIVENESS: Mutex<Option<String>> = Mutex::new(None);
+// A3 typed liveness sink. Per A1 ADR + F.8: state_json is opaque UTF-8
+// JSON shipped from managed; native does not parse it (additive-only contract,
+// no struct shape commitment). Native captures monotonic Instant at receipt
+// for staleness math; managed-side timestamp is shipped for forensics.
+struct Liveness {
+    last_heartbeat_ms: AtomicI64,             // managed-side monotonic ms (Stopwatch.GetTimestamp)
+    last_managed_instant: Mutex<Option<Instant>>, // native-side monotonic capture (R16)
+    state_json: Mutex<String>,                // last received raw payload
+    pid: AtomicI32,                           // editor PID (filled by unictl_start)
+}
+
+static LIVENESS: Liveness = Liveness {
+    last_heartbeat_ms: AtomicI64::new(0),
+    last_managed_instant: Mutex::new(None),
+    state_json: Mutex::new(String::new()),
+    pid: AtomicI32::new(0),
+};
+
+/// Build the `/liveness` JSON response. Shared by `unictl_get_liveness` export
+/// and the `("GET", "/liveness")` route in `protocol.rs`.
+///
+/// `last_state` is inlined as raw JSON — the producer (managed) controls the
+/// shape and validates it before sending. Native does not re-parse.
+///
+/// `phase_override` semantics:
+///   - `"never_seen"`: heartbeat has never arrived (cold start before A2 emitter ran)
+///   - `"unresponsive"`: last heartbeat older than `UNICTL_RELOAD_THRESHOLD_MS` (default 30000)
+///   - `null`: alive (use `last_state.phase` as authoritative)
+pub(crate) fn build_liveness_response() -> String {
+    let last_ms = LIVENESS.last_heartbeat_ms.load(Ordering::SeqCst);
+    let pid = LIVENESS.pid.load(Ordering::SeqCst);
+    let raw_state = LIVENESS.state_json.lock().unwrap().clone();
+    let last_state = if raw_state.is_empty() { "{}".to_owned() } else { raw_state };
+
+    let since_ms: i64 = LIVENESS
+        .last_managed_instant
+        .lock()
+        .unwrap()
+        .as_ref()
+        .map(|inst| inst.elapsed().as_millis() as i64)
+        .unwrap_or(-1);
+
+    let threshold_ms = std::env::var("UNICTL_RELOAD_THRESHOLD_MS")
+        .ok()
+        .and_then(|s| s.parse::<i64>().ok())
+        .unwrap_or(30_000);
+
+    let phase_override = if since_ms < 0 {
+        r#""never_seen""#
+    } else if since_ms > threshold_ms {
+        r#""unresponsive""#
+    } else {
+        "null"
+    };
+
+    let handler_registered = HANDLER.lock().unwrap().is_some();
+    let native_version = env!("CARGO_PKG_VERSION");
+
+    format!(
+        concat!(
+            r#"{{"schema_version":1,"#,
+            r#""alive_ms_ago":{},"#,
+            r#""last_heartbeat_ms":{},"#,
+            r#""last_state":{},"#,
+            r#""pid":{},"#,
+            r#""handler_registered":{},"#,
+            r#""phase_override":{},"#,
+            r#""native_version":"{}""#,
+            r#"}}"#,
+        ),
+        since_ms, last_ms, last_state, pid, handler_registered, phase_override, native_version
+    )
+}
 
 // --- exports ---
 
@@ -69,6 +137,9 @@ pub extern "C" fn unictl_start(path: *const c_char) -> i32 {
     *ASYNC_RESPONSES.lock().unwrap() = Some(HashMap::new());
     SHUTDOWN.store(false, Ordering::SeqCst);
     STARTED.store(true, Ordering::SeqCst);
+
+    // A3: capture editor PID so /liveness can return it without a managed call.
+    LIVENESS.pid.store(std::process::id() as i32, Ordering::SeqCst);
 
     #[cfg(target_os = "macos")]
     let result = server_unix::start(&path);
@@ -233,27 +304,47 @@ pub extern "C" fn unictl_respond(request_id: *const c_char, response_json: *cons
     }
 }
 
-// --- A2 stub: heartbeat sink (managed → native) ---
+// --- A3: heartbeat sink (managed → native) ---
 //
-// A2 stub: receives heartbeat from managed; A3 will implement actual storage,
-// monotonic-Instant capture, and `/liveness` route serving.
+// Receives heartbeat from managed and stores into typed LIVENESS.
 // Per F.8: JSON-over-pipe only — `state_json` is null-terminated UTF-8.
 // Per A1/A7: contract is additive-only; consumers must accept unknown fields.
-// Returns 0 on success, non-zero reserved for A3 (e.g. -1 on parse failure).
+// Per R16: native captures `Instant::now()` for staleness math (monotonic);
+//   `timestamp_ms` is stored for forensics only and never used for math.
+// Returns 0 on success, -1 on null/invalid UTF-8 payload.
 #[unsafe(no_mangle)]
 pub extern "C" fn unictl_heartbeat(timestamp_ms: i64, state_json: *const c_char) -> i32 {
     if state_json.is_null() {
         return -1;
     }
-    let json = unsafe { CStr::from_ptr(state_json) }
-        .to_str()
-        .unwrap_or("")
-        .to_owned();
+    let json = match unsafe { CStr::from_ptr(state_json) }.to_str() {
+        Ok(s) => s.to_owned(),
+        Err(_) => return -1,
+    };
 
-    // Minimal A2 behavior: store last payload so a smoke test or future A3
-    // wiring can observe it. Timestamp is intentionally ignored here; A3 will
-    // capture `std::time::Instant::now()` at receipt instead (R16: monotonic).
-    let _ = timestamp_ms;
-    *LIVENESS.lock().unwrap() = Some(json);
+    LIVENESS.last_heartbeat_ms.store(timestamp_ms, Ordering::SeqCst);
+    *LIVENESS.last_managed_instant.lock().unwrap() = Some(Instant::now());
+    *LIVENESS.state_json.lock().unwrap() = json;
     0
+}
+
+// --- A3: liveness query (CLI / tooling consumer) ---
+//
+// Writes the JSON liveness response into caller-owned buffer.
+// Returns bytes written, or -1 if buffer too small (caller should retry with
+// larger buffer; a 1 KB buffer is sufficient in practice).
+#[unsafe(no_mangle)]
+pub extern "C" fn unictl_get_liveness(buf: *mut u8, len: usize) -> i32 {
+    if buf.is_null() {
+        return -1;
+    }
+    let response = build_liveness_response();
+    let bytes = response.as_bytes();
+    if bytes.len() > len {
+        return -1;
+    }
+    unsafe {
+        std::ptr::copy_nonoverlapping(bytes.as_ptr(), buf, bytes.len());
+    }
+    bytes.len() as i32
 }
