@@ -30,6 +30,13 @@ static MAIN_QUEUE: Mutex<Vec<String>> = Mutex::new(Vec::new());
 // C# HttpListener 내부 포트 (main loop wake용)
 static INTERNAL_PORT: AtomicI32 = AtomicI32::new(0);
 
+// A2 stub: managed-side heartbeat sink. A3 will replace with a typed
+// `LivenessState` parsed via `serde_json` plus a monotonic `Instant` of
+// last receipt. For A2 we keep the most recently seen JSON payload as
+// an opaque string so the wire shape can be exercised end-to-end without
+// committing the receiver's struct layout. Per F.8: JSON-over-pipe only.
+static LIVENESS: Mutex<Option<String>> = Mutex::new(None);
+
 // --- exports ---
 
 #[unsafe(no_mangle)]
@@ -224,4 +231,29 @@ pub extern "C" fn unictl_respond(request_id: *const c_char, response_json: *cons
             let _ = tx.send(json);
         }
     }
+}
+
+// --- A2 stub: heartbeat sink (managed → native) ---
+//
+// A2 stub: receives heartbeat from managed; A3 will implement actual storage,
+// monotonic-Instant capture, and `/liveness` route serving.
+// Per F.8: JSON-over-pipe only — `state_json` is null-terminated UTF-8.
+// Per A1/A7: contract is additive-only; consumers must accept unknown fields.
+// Returns 0 on success, non-zero reserved for A3 (e.g. -1 on parse failure).
+#[unsafe(no_mangle)]
+pub extern "C" fn unictl_heartbeat(timestamp_ms: i64, state_json: *const c_char) -> i32 {
+    if state_json.is_null() {
+        return -1;
+    }
+    let json = unsafe { CStr::from_ptr(state_json) }
+        .to_str()
+        .unwrap_or("")
+        .to_owned();
+
+    // Minimal A2 behavior: store last payload so a smoke test or future A3
+    // wiring can observe it. Timestamp is intentionally ignored here; A3 will
+    // capture `std::time::Instant::now()` at receipt instead (R16: monotonic).
+    let _ = timestamp_ms;
+    *LIVENESS.lock().unwrap() = Some(json);
+    0
 }
