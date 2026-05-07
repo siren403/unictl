@@ -11,6 +11,18 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.3] - 2026-05-07
+
+---
+
+## [0.7.3] - 2026-05-07
+
+---
+
+## [0.7.3] - 2026-05-07
+
 ### Added
 
 - `unictl editor open --wait <state>` and `--timeout <duration>` flags. The
