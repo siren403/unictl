@@ -11,9 +11,83 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed (critical — v0.7.0 and v0.7.1 are broken on npm/UPM)
+
+The release pipeline never rebuilt the native bridge before assembling
+the UPM tarball. The bundled `Plugins/Windows/x86_64/unictl_native.dll`
+in v0.7.0 and v0.7.1 was an Apr-2026 build that predates Phase A; the
+`/liveness` route added in Phase A landed in Rust source but the
+shipped DLL didn't carry it. As a result, **anyone installing v0.7.0
+or v0.7.1 of the UPM package via Git URL gets `not_found` for every
+`unictl wait`, `editor compile --wait`, and `/liveness` call** — the
+C# side has the new code paths but the native end of the pipe
+doesn't speak them.
+
+v0.7.2 fixes the broken release path:
+
+- `release.ts` now calls the platform-appropriate native build script
+  (`scripts/build/build-native-windows.ps1` on Windows,
+  `scripts/build/build-native-macos.sh` on macOS) **before** running
+  assemble.
+- A freshness assertion fails the release if any native binary under
+  `packages/upm/com.unictl.editor/Plugins/` is older than the newest
+  Rust source file. Cross-platform binaries (e.g. macOS `.dylib` from
+  a Windows release host) must be rebuilt by their owning host before
+  the next release; the assertion catches that gap explicitly rather
+  than letting a stale binary ship silently.
+- `native/unictl_native/Cargo.toml` version moved from `0.1.0` to track
+  the unictl release version so binary ↔ source provenance is visible.
+- `UnictlRuntimeJson.cs` C# Debug ambiguity fix: `using
+  System.Diagnostics` (for `Stopwatch`) collided with `using
+  UnityEngine` on `Debug.LogWarning`. The four call sites now fully
+  qualify as `UnityEngine.Debug.LogWarning`. v0.7.0 / v0.7.1
+  consumers saw this as `error CS0104` once Unity tried to compile
+  the bundled UPM source.
+
+Migration for affected installs: bump the UPM Git URL to `#v0.7.2`
+and bump `bunx unictl@0.7.2` (or `npm i -g unictl@0.7.2`). Restart
+Unity after the UPM upgrade so the new DLL loads.
+
+### Fixed (dogfood discoverability)
+
+- Removed the misleading `unictl command list` → `unictl describe-all`
+  deprecation hint emitted in v0.7.0 / v0.7.1. The two commands are
+  not equivalent and the deprecation overreach was incorrect:
+  - `unictl command list` enumerates every `[UnictlTool]` registered
+    at runtime — builtin tools (capture_ui, editor_log, execute_menu,
+    ping, ugui_input, ui_toolkit_input, build_status, build_cancel,
+    editor_control, build_project, test_run) plus all consumer-defined
+    `[UnictlTool]` classes. It is the canonical runtime discovery
+    channel and is NOT deprecated.
+  - `unictl describe-all` returns static `DescribeMetadata` for the
+    v0.7 verb-noun tree only (10 verbs after this patch). It does
+    not require a running editor.
+  Both remain. `MIGRATION.md` and `DEPRECATION.md` updated to drop
+  the wrong row and call out the policy.
+- `unictl command --describe` added: emits canonical
+  `DescribeMetadata` for the `command` verb itself (when, when_not,
+  examples, args). The verb is now first-class in the agent metadata
+  tree alongside the v0.7 verbs, closing the discoverability gap that
+  previously required reading C# source to learn the call shape.
+- `unictl describe-all` now also includes the `command` verb metadata
+  (10 verbs total) since `command` is permanent.
+
+### Notes
+
+- v0.7.0 and v0.7.1 will be marked `npm deprecate`d once v0.7.2 is
+  live. Do not pin to those versions.
+- Per-tool metadata (`unictl command <tool> --describe`) requires
+  enrichment of the C# `[UnictlTool]` registry to expose param/action
+  schemas through IPC; deferred to a future v0.7.x patch.
+- Future minor: migrate the remaining 10 builtin `[UnictlTool]`s to
+  verb-noun hosts so `command` narrows to consumer-defined
+  registrations only. Tracked separately.
+
 ---
 
 ## [0.7.1] - 2026-05-07
+
+> Broken on UPM — see v0.7.2 above. Do not install.
 
 ### Fixed
 - Documentation: clarified that `unictl command` is the canonical
@@ -22,10 +96,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
   notes incorrectly stated "v1.0 will remove the legacy surface" —
   v1.0 removes only the *specific invocation patterns* that have a
   v0.7 verb-noun equivalent (`unictl command editor_control -p
-  action=play|stop|compile|refresh` and `unictl command list`). The
-  dispatcher itself, plus any custom tool registered via
-  `[UnictlTool]` in a consumer Unity project, are not deprecated and
-  are not affected by v1.0.
+  action=play|stop|compile|refresh`). The dispatcher itself, plus
+  any custom tool registered via `[UnictlTool]` in a consumer Unity
+  project, are not deprecated and are not affected by v1.0.
+  *(v0.7.2 amendment: this entry incorrectly listed `command list`
+  among the removed patterns. `command list` is the canonical
+  runtime discovery channel and is NOT removed in v1.0. See v0.7.2
+  Fixed section above.)*
 - `--help --json` deprecation policy unchanged: replaced by
   `--describe` / `unictl describe-all` and removed in v1.0.
 - No code changes; runtime behavior of `unictl command <tool>` is

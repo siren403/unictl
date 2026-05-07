@@ -28,8 +28,15 @@ No breaking IPC protocol changes. Native ABI is additive-only after Phase A7.
 | `unictl command editor_control -p action=stop` | `unictl editor stop` |
 | `unictl command editor_control -p action=compile` | `unictl editor compile` |
 | `unictl command editor_control -p action=refresh` | `unictl editor refresh` |
-| `unictl command list` | `unictl describe-all` |
 | `unictl --help --json` (text→JSON) | `unictl <verb> --describe` (canonical metadata) |
+
+> v0.7.0 / v0.7.1 of this guide listed `unictl command list` → `unictl
+> describe-all` here. That mapping was **wrong** and was removed in
+> v0.7.2. The two commands are not equivalent: `command list`
+> enumerates every registered `[UnictlTool]` at runtime (builtin
+> tools + consumer-defined tools), while `describe-all` returns
+> static metadata for the v0.7 verb-noun tree only. Use both —
+> they cover different surfaces.
 
 The legacy forms continue to work and emit a one-line `[deprecated]`
 stderr suggestion on the mappable cases. The mapping table above is

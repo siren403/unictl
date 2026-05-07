@@ -10,7 +10,7 @@ import { runCompile } from "./compile";
 import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
-import { describeAll } from "./describe";
+import { describeAll, lookupDescribe } from "./describe";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
   buildGitPackageReference,
@@ -571,16 +571,19 @@ const compileCmd = defineCommand({
   },
 });
 
-// v0.6 → v0.7 verb-noun migration hints. When a user invokes the legacy
+// v0.6 → v0.7 verb-noun migration hints. When a user invokes a legacy
 // `unictl command <tool> -p action=<act>` shape that has a v0.7 equivalent,
 // emit a one-line deprecation suggestion on stderr (does not change behavior).
 //
-// Per critic 4.0 + C-mapping: this is the gentle lane. Hard removal of the
-// legacy `command` verb is scheduled for v1.0; until then both work.
+// Policy correction (v0.7.2): `unictl command` itself is permanent — it
+// stays as the canonical dispatcher for builtin tools without a v0.7 verb
+// (capture_ui, editor_log, execute_menu, ping, ugui_input, ui_toolkit_input,
+// build_status, build_cancel, editor_control action=load_scene) AND for all
+// consumer-defined `[UnictlTool]` registrations. v1.0 hard-removes only the
+// specific invocation patterns mapped below. `unictl command list` is NOT
+// deprecated — it is the canonical runtime discovery channel and is NOT
+// equivalent to `unictl describe-all` (which only covers v0.7 verb-noun).
 function suggestV07Mapping(toolName: string, params: Record<string, unknown>): string | null {
-  if (toolName === "list") {
-    return "unictl describe-all  # canonical v0.7 metadata for all verb-noun commands";
-  }
   if (toolName === "editor_control") {
     const action = typeof params.action === "string" ? params.action : null;
     switch (action) {
@@ -613,8 +616,25 @@ const commandCmd = defineCommand({
       type: "string",
       description: "Unity project path (auto-detected if omitted)",
     },
+    describe: {
+      type: "boolean",
+      description: "Emit canonical agent metadata (DescribeMetadata) for the command verb and exit without invoking the tool.",
+    },
   },
   run: async ({ args, rawArgs }) => {
+    // v0.7.2: --describe is the canonical metadata channel for the command
+    // verb. The verb itself is permanent (custom [UnictlTool] dispatcher),
+    // and exposing its DescribeMetadata closes the dogfood discoverability
+    // gap that previously required reading C# source to learn the call shape.
+    // Per-tool metadata still flows through `unictl command list` at runtime;
+    // a future patch may layer per-tool --describe through an IPC enrichment.
+    if (args.describe === true) {
+      const meta = lookupDescribe("command");
+      if (meta) {
+        console.log(JSON.stringify(meta));
+        process.exit(0);
+      }
+    }
     try {
       const toolName = args.tool ? String(args.tool) : "list";
       const params = await resolveParams(rawArgs);

@@ -309,6 +309,38 @@ export const v07Describes: Record<string, DescribeMetadata> = {
     since_version: SINCE,
     stability: "beta",
   },
+  "command": {
+    schema_version: 1,
+    name: "command",
+    verb: "command",
+    noun: "",
+    summary: "Canonical dispatcher for `[UnictlTool]` registrations (builtin tools without a v0.7 verb-noun host AND all consumer-defined tools). Permanent — not deprecated, not removed in v1.0.",
+    when: [
+      "Invoking a builtin tool that has no v0.7 verb-noun equivalent yet (capture_ui, editor_log, execute_menu, ping, ugui_input, ui_toolkit_input, build_status, build_cancel, editor_control action=load_scene).",
+      "Invoking a consumer project's own `[UnictlTool]` C# registration.",
+      "Enumerating all installed `[UnictlTool]` registrations at runtime via `unictl command list`.",
+    ],
+    when_not: [
+      "A v0.7 verb-noun equivalent exists (editor.compile/play/stop/refresh, input.set, scripting.set, deploy.android.keystore.set, settings.raw-set, wait, describe-all). Prefer the verb-noun form — v1.0 hard-removes those specific `command <tool>` invocation patterns even though the dispatcher itself stays.",
+      "You only need static (offline) discovery of v0.7 verbs — use `unictl describe-all` instead, which returns metadata without an editor running.",
+    ],
+    args: [
+      ...COMMON_ARGS,
+      { name: "tool", type: "string", required: false, description: "UnictlTool name (e.g. editor_log, capture_ui, my_custom_tool). Omit to enumerate all tools." },
+      { name: "p", type: "string", required: false, description: "Parameter as key=value, repeatable (e.g. -p action=tail -p lines=50)." },
+    ],
+    examples: [
+      { cmd: "unictl command list", intent: "enumerate all [UnictlTool] registrations at runtime (builtin + consumer-defined)" },
+      { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the file-based Editor.log" },
+      { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
+      { cmd: "unictl command my_save_inspector -p target=Player", intent: "invoke a consumer-defined [UnictlTool]" },
+      { cmd: "unictl command --describe", intent: "emit this metadata as JSON" },
+    ],
+    exit_codes: [0, 1, 2, 3, 124, 125],
+    related: ["describe-all", "doctor", "health"],
+    since_version: "0.1.0",
+    stability: "stable",
+  },
   "wait": {
     schema_version: 1,
     name: "wait",

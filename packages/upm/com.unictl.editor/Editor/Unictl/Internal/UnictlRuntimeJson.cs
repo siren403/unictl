@@ -57,7 +57,7 @@ namespace Unictl
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[unictl] runtime.json bootstrap failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[unictl] runtime.json bootstrap failed: {ex.Message}");
             }
         }
 
@@ -71,7 +71,7 @@ namespace Unictl
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[unictl] runtime.json quit write failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[unictl] runtime.json quit write failed: {ex.Message}");
             }
 
             try
@@ -119,11 +119,11 @@ namespace Unictl
                 var detectedAt = MonotonicNowMs();
                 var withCrashAnnotation = $"{{\"detected_at_ms\":{detectedAt.ToString(CultureInfo.InvariantCulture)},\"crash_inferred_terminal_reason\":\"crash\",\"previous\":{previous}}}";
                 File.WriteAllText(sidecarPath, withCrashAnnotation);
-                Debug.LogWarning($"[unictl] previous session ended without quit — recorded crash sidecar at {sidecarPath}");
+                UnityEngine.Debug.LogWarning($"[unictl] previous session ended without quit — recorded crash sidecar at {sidecarPath}");
             }
             catch (Exception ex)
             {
-                Debug.LogWarning($"[unictl] crash sidecar record failed: {ex.Message}");
+                UnityEngine.Debug.LogWarning($"[unictl] crash sidecar record failed: {ex.Message}");
             }
         }
 

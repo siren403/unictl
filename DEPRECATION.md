@@ -21,7 +21,13 @@ is unchanged.
 | `unictl command editor_control -p action=stop` | `unictl editor stop` |
 | `unictl command editor_control -p action=compile` | `unictl editor compile` |
 | `unictl command editor_control -p action=refresh` | `unictl editor refresh` |
-| `unictl command list` | `unictl describe-all` |
+
+> v0.7.0 / v0.7.1 of this file listed `unictl command list` → `unictl
+> describe-all` in the table above. That mapping was **wrong** — the
+> two commands are not equivalent. v0.7.2 removed the row. `command
+> list` enumerates every registered `[UnictlTool]` at runtime
+> (builtin + consumer-defined); `describe-all` returns static
+> metadata for the v0.7 verb-noun tree only. Both remain.
 
 The deprecation hint is emitted only for the patterns above. v1.0 will
 hard-remove these specific call shapes (the runtime mapping table goes

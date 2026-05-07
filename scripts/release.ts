@@ -211,6 +211,104 @@ function runValidationScripts(): void {
   run(["bun", "run", "scripts/check-unity-meta-guids.ts"]);
 }
 
+// ---------------------------------------------------------------------------
+// Native bridge build + freshness assertion
+// ---------------------------------------------------------------------------
+//
+// History: v0.7.0 / v0.7.1 shipped with a stale Apr-13 DLL because the release
+// pipeline never rebuilt the native bridge before assembling the UPM tarball.
+// The /liveness route added in Phase A landed in Rust source but the bundled
+// DLL didn't carry it, so consumer installs returned `not_found` for every
+// liveness/wait call. v0.7.2 adds:
+//
+//   1. A platform-specific build step that always runs before assemble.
+//   2. A freshness assertion that fails fast if any committed native binary
+//      under packages/upm/com.unictl.editor/Plugins is older than the latest
+//      Rust source file. This catches missed rebuilds on other platforms
+//      (e.g. macOS .dylib left untouched while Windows DLL was rebuilt).
+//
+// Cross-platform note: the current release host can only rebuild ITS OWN
+// platform binary (Windows host → DLL only; macOS host → dylib only). Binaries
+// for other platforms must be committed by whoever last released from that
+// platform. The freshness check below catches the gap.
+
+import { readdirSync, statSync } from "fs";
+
+const NATIVE_SRC_DIR  = join(ROOT, "native/unictl_native/src");
+const NATIVE_CARGO    = join(ROOT, "native/unictl_native/Cargo.toml");
+const UPM_PLUGIN_DIR  = join(ROOT, "packages/upm/com.unictl.editor/Plugins");
+
+const NATIVE_BUILD_BY_PLATFORM: Record<string, string[]> = {
+  win32:  ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "scripts/build/build-native-windows.ps1"],
+  darwin: ["bash", "scripts/build/build-native-macos.sh"],
+};
+
+function walkFiles(dir: string, predicate: (name: string) => boolean): string[] {
+  if (!existsSync(dir)) return [];
+  const out: string[] = [];
+  for (const ent of readdirSync(dir, { withFileTypes: true })) {
+    const p = join(dir, ent.name);
+    if (ent.isDirectory()) {
+      out.push(...walkFiles(p, predicate));
+    } else if (predicate(ent.name)) {
+      out.push(p);
+    }
+  }
+  return out;
+}
+
+function latestMtimeMs(files: string[]): number {
+  let latest = 0;
+  for (const f of files) {
+    const m = statSync(f).mtimeMs;
+    if (m > latest) latest = m;
+  }
+  return latest;
+}
+
+function buildNativeAndAssertFreshness(): void {
+  const platform = process.platform;
+  const buildCmd = NATIVE_BUILD_BY_PLATFORM[platform];
+
+  if (buildCmd) {
+    console.log(`  Step 0: build native bridge (${platform})`);
+    run(buildCmd);
+  } else {
+    console.warn(`  Step 0: no native build script for platform '${platform}'; skipping rebuild`);
+    console.warn(`         freshness assertion below still runs.`);
+  }
+
+  const sources = [
+    ...walkFiles(NATIVE_SRC_DIR, (n) => n.endsWith(".rs")),
+    NATIVE_CARGO,
+  ].filter(existsSync);
+  const srcMtime = latestMtimeMs(sources);
+
+  const binaries = walkFiles(UPM_PLUGIN_DIR, (n) => /\.(dll|dylib|so)$/i.test(n));
+  if (binaries.length === 0) {
+    console.error("\n  ERROR: no native binaries found under packages/upm/com.unictl.editor/Plugins/");
+    console.error("  The UPM tarball would ship without a native bridge.\n");
+    process.exit(1);
+  }
+
+  const stale: string[] = [];
+  for (const bin of binaries) {
+    const m = statSync(bin).mtimeMs;
+    if (m < srcMtime) stale.push(bin);
+  }
+  if (stale.length > 0) {
+    console.error("\n  ERROR: stale native binaries detected (older than newest Rust source):");
+    for (const f of stale) {
+      const m = new Date(statSync(f).mtimeMs).toISOString();
+      console.error(`    ${f}  (${m})`);
+    }
+    console.error(`  Newest source mtime: ${new Date(srcMtime).toISOString()}`);
+    console.error(`  Rebuild on the host that owns each platform's binary, then re-run release.\n`);
+    process.exit(1);
+  }
+  console.log(`  Native binaries OK (${binaries.length} file(s), newest source ${new Date(srcMtime).toISOString()})`);
+}
+
 // --- main ---
 
 const args = process.argv.slice(2);
@@ -251,6 +349,10 @@ updateRoadmapHeader(next);
 // Release blockers that should run before artifact assembly/publish.
 console.log("  Step 2c: repository validation");
 runValidationScripts();
+
+// Native bridge build + freshness assertion. v0.7.0/0.7.1 shipped stale DLLs
+// because the pipeline never rebuilt before assemble; this step closes that gap.
+buildNativeAndAssertFreshness();
 
 // Post-version-sync: run assemble.ts to build integration artifacts + checksums
 console.log("  Step 3: assemble integration artifacts");
