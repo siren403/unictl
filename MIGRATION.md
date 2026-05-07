@@ -4,12 +4,19 @@
 
 ### Summary
 
-v0.7.0 introduces a verb-noun command tree alongside the legacy
-`unictl command <tool>` surface. The legacy surface keeps working — every
-v0.6 invocation that worked before still works the same way and emits the
-same exit codes. The new surface is layered on top with structured error
-envelopes, canonical agent metadata via `--describe`, and a wait engine
-for editor-state synchronization. v1.0 will remove the legacy surface.
+v0.7.0 introduces a verb-noun command tree alongside the existing
+`unictl command <tool>` dispatcher. Every v0.6 invocation that worked
+before still works the same way and emits the same exit codes. The new
+surface is layered on top with structured error envelopes, canonical
+agent metadata via `--describe`, and a wait engine for editor-state
+synchronization.
+
+The `unictl command` verb itself is **not** going away — it remains the
+canonical dispatcher for consumer-defined `[UnictlTool]` classes. v1.0
+hard-removes only the *specific invocation patterns* that have a v0.7
+verb-noun equivalent (see the table below). The dispatcher and any
+custom `[UnictlTool]` registered in a consumer Unity project continue
+to be invoked via `unictl command <tool>` indefinitely.
 
 No breaking IPC protocol changes. Native ABI is additive-only after Phase A7.
 
@@ -25,8 +32,27 @@ No breaking IPC protocol changes. Native ABI is additive-only after Phase A7.
 | `unictl --help --json` (text→JSON) | `unictl <verb> --describe` (canonical metadata) |
 
 The legacy forms continue to work and emit a one-line `[deprecated]`
-stderr suggestion on the mappable cases. They will be removed in v1.0
-per [DEPRECATION.md](DEPRECATION.md).
+stderr suggestion on the mappable cases. The mapping table above is
+removed in v1.0 — i.e. `unictl command editor_control -p action=play`
+will return an unknown-tool error then. The `unictl command` dispatcher
+itself stays. See [DEPRECATION.md](DEPRECATION.md) for the full policy.
+
+### Custom `[UnictlTool]` invocation (unchanged)
+
+Consumer projects that register their own tools via the `[UnictlTool]`
+attribute keep invoking them through `unictl command`:
+
+```bash
+# Consumer-defined tool — same call shape across v0.6 / v0.7 / v1.0+.
+unictl command my_save_inspector -p target=Player
+```
+
+Builtin tools that have NO v0.7 verb-noun equivalent yet
+(`capture_ui`, `editor_log`, `execute_menu`, `ping`, `ugui_input`,
+`ui_toolkit_input`, `build_status`, `build_cancel`,
+`editor_control -p action=load_scene`) also continue via
+`unictl command <tool>` until/unless a future minor release adds
+verb-noun hosts for them. They are NOT covered by the v1.0 removal.
 
 ### Output format change for v0.7 verbs
 

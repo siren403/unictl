@@ -1,22 +1,73 @@
 # Deprecation Notices
 
-## `unictl command <tool>` (deprecated as of v0.7.0, removed in v1.0)
+## v0.6-style builtin invocations via `unictl command` (deprecated as of v0.7.0)
 
-The legacy generic-tool dispatcher is superseded by the v0.7 verb-noun
-tree. Every v0.6 invocation continues to work in v0.7 and emits a
-one-line `[deprecated]` stderr suggestion when a v0.7 equivalent exists.
+> **Correction note** (v0.7.1): the v0.7.0 release of this file said
+> "`unictl command` is removed in v1.0". That was wrong. `unictl command`
+> is the canonical dispatcher for **consumer-defined `[UnictlTool]`
+> classes** and stays in the CLI. Only the specific *invocation patterns*
+> that have a v0.7 verb equivalent are deprecated; the dispatcher itself
+> is permanent.
 
-| Legacy invocation | v0.7 equivalent |
-|-------------------|------------------|
+The v0.7 verb-noun tree provides direct verbs for a handful of builtin
+tools that used to be reachable only through `unictl command`. When you
+call those builtins via the legacy form, v0.7 prints a one-line
+`[deprecated]` stderr hint suggesting the new verb. Functional behavior
+is unchanged.
+
+| Legacy invocation pattern (deprecated) | v0.7 verb-noun equivalent |
+|----------------------------------------|---------------------------|
 | `unictl command editor_control -p action=play` | `unictl editor play` |
 | `unictl command editor_control -p action=stop` | `unictl editor stop` |
 | `unictl command editor_control -p action=compile` | `unictl editor compile` |
 | `unictl command editor_control -p action=refresh` | `unictl editor refresh` |
 | `unictl command list` | `unictl describe-all` |
 
-Custom `[UnictlTool]` C# tools that are NOT mapped above continue to be
-invokable via `unictl command <tool> -p ...`. They will need a
-verb-noun host once v1.0 removes the legacy dispatcher.
+The deprecation hint is emitted only for the patterns above. v1.0 will
+hard-remove these specific call shapes (the runtime mapping table goes
+away, and `unictl command editor_control -p action=play` will return an
+unknown-tool error). Consumers should migrate those call sites before
+v1.0.
+
+### What is NOT deprecated
+
+- The `unictl command <tool>` verb itself — it remains the canonical
+  dispatcher for consumer-defined `[UnictlTool]` classes (see below).
+- Builtin tools that have **no** v0.7 verb-noun equivalent yet:
+  `capture_ui`, `editor_log`, `execute_menu`, `ping`, `ugui_input`,
+  `ui_toolkit_input`, `build_status`, `build_cancel`,
+  `editor_control -p action=load_scene`. These continue to be invoked
+  via `unictl command <tool>` until/unless a future minor release
+  introduces verb-noun hosts for them.
+- Any third-party `[UnictlTool]` registered in a consumer Unity project.
+
+### Custom `[UnictlTool]` invocation (permanent — NOT deprecated)
+
+Consumer projects can register their own tools via the `[UnictlTool]`
+attribute on a static C# class with a `HandleCommand(JObject)` entry
+point. unictl discovers them at runtime via assembly scan in
+`ToolRouter.cs`:
+
+```csharp
+// Editor/MyTools/MySaveInspector.cs in a consumer project
+[UnictlTool(Name = "my_save_inspector",
+            Description = "Inspect player save state via IPC")]
+public static class MySaveInspector {
+    public static object HandleCommand(JObject p) {
+        // ... return any JSON-serializable result
+    }
+}
+```
+
+```bash
+# Invocation — this path is permanent.
+unictl command my_save_inspector -p target=Player
+```
+
+This is the supported, permanent path for consumer-defined tools.
+Future versions may rename the verb (e.g. to `unictl tool <name>`) but
+the *capability* of dispatching arbitrary `[UnictlTool]` registrations
+through the CLI will not be removed.
 
 Migration: see [MIGRATION.md](MIGRATION.md#06x--070).
 

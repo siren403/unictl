@@ -11,14 +11,39 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+- Documentation: clarified that `unictl command` is the canonical
+  dispatcher for consumer-defined `[UnictlTool]` classes and stays in
+  the CLI permanently. v0.7.0's CHANGELOG / MIGRATION / DEPRECATION
+  notes incorrectly stated "v1.0 will remove the legacy surface" —
+  v1.0 removes only the *specific invocation patterns* that have a
+  v0.7 verb-noun equivalent (`unictl command editor_control -p
+  action=play|stop|compile|refresh` and `unictl command list`). The
+  dispatcher itself, plus any custom tool registered via
+  `[UnictlTool]` in a consumer Unity project, are not deprecated and
+  are not affected by v1.0.
+- `--help --json` deprecation policy unchanged: replaced by
+  `--describe` / `unictl describe-all` and removed in v1.0.
+- No code changes; runtime behavior of `unictl command <tool>` is
+  identical to v0.7.0 (matches the `suggestV07Mapping` logic in
+  `cli.ts`, which only ever emitted hints for mapped invocations).
+
 ---
 
 ## [0.7.0] - 2026-05-06
 
 v0.7.0 lands the verb-noun command tree, native heartbeat ABI, runtime liveness
-descriptor, and lifecycle settings bundles. The legacy `unictl command` verb
-and `--help --json` alias remain functional but are deprecated; v1.0 will
-remove them.
+descriptor, and lifecycle settings bundles. v0.6 invocations continue to work
+unchanged. v0.7 introduces canonical agent metadata via `--describe` and a
+wait engine for editor-state synchronization.
+
+> Documentation correction in v0.7.1: the original v0.7.0 release notes
+> stated "the legacy `unictl command` verb is deprecated; v1.0 will
+> remove it." That claim was overbroad. v1.0 hard-removes only the
+> specific invocation patterns that have a v0.7 verb-noun equivalent;
+> the `unictl command` dispatcher itself stays in the CLI as the
+> canonical path for consumer-defined `[UnictlTool]` classes. See
+> v0.7.1 above and the corrected DEPRECATION.md for the precise policy.
 
 See [MIGRATION.md](MIGRATION.md) and [DEPRECATION.md](DEPRECATION.md) for the
 v0.6 → v0.7 migration path.
@@ -142,9 +167,20 @@ v0.6 → v0.7 migration path.
   legacy v0.6 verbs keep their existing per-call envelopes.
 
 ### Deprecated
-- `unictl command <tool>` and `unictl <subcmd> --help --json` are deprecated
-  in v0.7 and removed in v1.0. v0.7 emits a one-line `[deprecated]` stderr
-  suggestion on mappable invocations. See [DEPRECATION.md](DEPRECATION.md).
+- v0.6-style invocations of mapped builtins via `unictl command` are
+  deprecated; v1.0 hard-removes them: `unictl command editor_control
+  -p action=play|stop|compile|refresh` and `unictl command list`.
+  v0.7 emits a one-line `[deprecated]` stderr suggestion on those
+  mappable invocations. The `unictl command` dispatcher itself,
+  builtin tools without a v0.7 equivalent, and any custom
+  `[UnictlTool]` registered in a consumer Unity project remain
+  invokable through `unictl command <tool>` indefinitely.
+- `unictl <subcmd> --help --json` deprecated in v0.7 and removed in
+  v1.0; replaced by `--describe` / `unictl describe-all`.
+- (Documentation correction note: the v0.7.0 ship of this file
+  briefly stated "the legacy `unictl command` verb itself is removed
+  in v1.0". That was overbroad — see v0.7.1 above and DEPRECATION.md
+  for the precise policy.)
 
 ### Plan + spike artifacts
 - `docs/standalone/v0.7-plan.md` (planner + architect + critic synthesis)
