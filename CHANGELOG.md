@@ -11,6 +11,66 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+
+- `unictl editor open --wait <state>` and `--timeout <duration>` flags. The
+  bare `--wait` form defaults to `reachable` (the v0.7 ready-sync state).
+  citty consumes `--timeout` as the wait value when both appear in
+  `--wait --timeout 30s` form, so a `rawArgs` probe recovers it. Default
+  ceiling falls through to `(any).reachable=120s`; `--timeout 5m` (or `0`
+  unbounded) is recommended for cold-start projects.
+- `unictl editor quit --timeout <duration>` flag. Caps the graceful quit
+  ceiling before SIGTERM fallback (default 15s). Useful when callers know
+  the editor is responsive and want a tighter ceiling.
+
+### Changed
+
+- `editor open --wait reachable` now short-circuits the wait engine when the
+  editor is already running. A single `/health` probe confirms the IPC
+  handler is registered and returns immediately. The wait engine's
+  `reachable` predicate also checks `phase_override`, which flips to
+  `unresponsive` whenever the editor is unfocused (Unity throttles
+  `EditorApplication.update` so heartbeat stalls). Treating that as
+  not-ready was a false negative for ready-sync — the IPC channel is fully
+  functional. Cold-starts and non-`reachable` wait targets still use the
+  full engine.
+- `editor.ts` `editorOpen()` "already running" throw now attaches
+  `kind = "editor_running"` and `pid`. Without the kind tag, `cli.ts` was
+  catching it as `ipc_error` and the idempotent-ready branch couldn't
+  fire.
+- `editor.ts` `editorQuit()` polling uses PID-disappearance as the single
+  source of truth. The previous endpoint-OR-pid form was a false-positive
+  hazard: the named-pipe descriptor file can disappear during Unity's
+  graceful shutdown sequence while the process is still alive (saving
+  caches, finishing asset import). PID-gone is the only signal that
+  proves termination.
+
+### QA infrastructure (mise + bun)
+
+- New mise task tree under `.mise/tasks/qa/` exercises the v0.7 runtime
+  contract end-to-end. Tasks share `.mise/qa-lib.ts` (`TaskRunner`,
+  `runUnictl`, `parseJsonLine`, `isEditorReachable`, `PROJECT_ROOT`) and
+  emit JSON on stdout / banner on stderr. Step results report PASS / FAIL
+  / SKIP with structured payloads.
+- `qa:cycle` — compile → play → stop wait cycle (60s per step).
+- `qa:sigint` — `runWait` interrupt path against a non-existent project
+  (target=reachable to stay in the polling loop regardless of editor
+  state). Schedules `process.emit("SIGINT")` 800 ms in; expects
+  `kind: interrupted` and exit 130.
+- `qa:crash` — taskkill the editor, reopen, and verify the
+  `runtime.json.crashed.<pid>.<startedAtMs>.json` sidecar is written by
+  the new session's `[InitializeOnLoad]` (B5 detection). Polls the
+  sidecar file directly rather than gating on `--wait reachable`: the
+  sidecar lands during `[InitializeOnLoad]` and finishes before IPC
+  handler registration, so waiting for `reachable` would block on a
+  downstream signal that arrives later than the actual signal under test.
+- `qa:ceiling` — relaunch the editor with `UNICTL_RELOAD_THRESHOLD_MS=1`,
+  expect `/liveness` to report `phase_override = unresponsive`, and
+  expect `wait idle` to short-circuit with `kind = editor_unresponsive`
+  (exit 3). Restores a healthy editor on cleanup.
+- `qa:_default` (mise namespace default) orchestrates the four tasks
+  sequentially and aggregates their JSON results.
+
 ---
 
 ## [0.7.2] - 2026-05-07

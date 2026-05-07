@@ -142,6 +142,7 @@ export async function editorStatus(opts?: { project?: string }): Promise<EditorS
 export async function editorQuit(opts?: {
   project?: string;
   force?: boolean;
+  gracefulTimeoutMs?: number;
 }): Promise<unknown> {
   const endpoint = resolveEndpointDescriptor(opts?.project);
 
@@ -156,12 +157,16 @@ export async function editorQuit(opts?: {
     // Endpoint closed immediately on quit — treat as success signal
   }
 
-  // Poll until endpoint disappears (200ms interval, 15s timeout)
-  const timeout = Date.now() + 15_000;
+  // Poll PID — single source of truth for "is the editor really gone?". Endpoint
+  // cleanup is unreliable: the named-pipe descriptor file can disappear during
+  // Unity's graceful shutdown sequence while the process itself is still alive
+  // (saving caches, finishing asset import). Treating that as quit:true would
+  // be a false positive. PID-gone is the only signal that proves termination.
+  const gracefulCeiling = opts?.gracefulTimeoutMs ?? 15_000;
+  const timeout = Date.now() + gracefulCeiling;
   while (Date.now() < timeout) {
     await sleep(200);
-    const nextEndpoint = readEndpointDescriptor(opts?.project) ?? endpoint;
-    if (!endpointIsReachable(nextEndpoint)) {
+    if ((await getUnityPid(opts?.project)) === null) {
       return { quit: true };
     }
   }
@@ -194,7 +199,10 @@ export async function editorOpen(opts?: {
   // Refuse if already running
   const existingPid = await getUnityPid(opts?.project);
   if (existingPid !== null) {
-    throw new Error(`Unity editor is already running (pid=${existingPid})`);
+    const err = new Error(`Unity editor is already running (pid=${existingPid})`);
+    (err as any).kind = "editor_running";
+    (err as any).pid = existingPid;
+    throw err;
   }
 
   // Clean backup scenes to avoid recovery popup

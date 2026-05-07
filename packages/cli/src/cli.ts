@@ -11,6 +11,14 @@ import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
 import { describeAll, lookupDescribe } from "./describe";
+import {
+  WAIT_STATES,
+  type WaitState,
+  parseDuration,
+  lookupTimeoutDefault,
+  runWait,
+  outcomeToEnvelope,
+} from "./wait";
 import { getCliPackageMeta, getEmbeddedEditorPackageVersion, getRepoUrl } from "./meta";
 import {
   buildGitPackageReference,
@@ -437,10 +445,30 @@ const editorQuitCmd = defineCommand({
       description: "Force kill if graceful quit times out",
       default: false,
     },
+    timeout: {
+      type: "string",
+      description: "Graceful quit ceiling before SIGTERM fallback (e.g. 5s, 30s, 1m). Default 15s.",
+    },
   },
   run: async ({ args }) => {
+    let gracefulTimeoutMs: number | undefined;
+    if (typeof args.timeout === "string" && args.timeout.length > 0) {
+      const parsed = parseDuration(args.timeout);
+      if (Number.isNaN(parsed) || parsed <= 0) {
+        output({
+          ok: false,
+          error: {
+            kind: "invalid_param",
+            message: `Cannot parse --timeout '${args.timeout}'. Expected forms: 5s, 30s, 1m.`,
+            hint_command: lookupHintCommand("invalid_param"),
+          },
+        });
+        process.exit(2);
+      }
+      gracefulTimeoutMs = parsed * 1000;
+    }
     try {
-      output(await editorQuit({ project: args.project, force: args.force }));
+      output(await editorQuit({ project: args.project, force: args.force, gracefulTimeoutMs }));
     } catch (e: any) {
       const kind = e.kind ?? "ipc_error";
       output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
@@ -461,15 +489,154 @@ const editorOpenCmd = defineCommand({
       default: false,
       description: "Skip the batch-mode pre-compile check",
     },
+    wait: {
+      type: "string",
+      description: "After spawn, block until editor reaches the given state (idle | playing | compiling | reloading | reachable). Pass `--wait` alone to use the default state 'reachable'. Omit for fire-and-forget (current behavior).",
+    },
+    timeout: {
+      type: "string",
+      description: "Wait timeout (e.g. 30s, 2m, 1h, 0 unbounded). Default per F.3 matrix; for editor.open this falls back to the (any).reachable=120s entry. Use a longer value or 0 for cold-start projects.",
+    },
   },
-  run: async ({ args }) => {
+  run: async ({ args, rawArgs }) => {
+    // Resolve --wait first. citty's string arg requires a value, so
+    // `--wait --timeout 30s` would consume `--timeout` as the wait value.
+    // Probe rawArgs to detect the bare `--wait` form and fall back to the
+    // verb default state ('reachable' for editor.open per the v0.7 ready-sync
+    // contract).
+    const waitFlagIdx = rawArgs.indexOf("--wait");
+    const waitNext = waitFlagIdx >= 0 ? rawArgs[waitFlagIdx + 1] : undefined;
+    const waitNextIsFlag = typeof waitNext === "string" && waitNext.startsWith("--");
+    let waitTarget: WaitState | null = null;
+
+    if (waitFlagIdx >= 0 && (waitNext === undefined || waitNextIsFlag)) {
+      waitTarget = "reachable";
+    } else if (typeof args.wait === "string" && args.wait.length > 0) {
+      if (!WAIT_STATES.includes(args.wait as WaitState)) {
+        output({
+          ok: false,
+          error: {
+            kind: "invalid_param",
+            message: `Unknown wait state '${args.wait}'. Valid: ${WAIT_STATES.join(", ")}.`,
+            hint_command: lookupHintCommand("invalid_param"),
+          },
+        });
+        process.exit(2);
+      }
+      waitTarget = args.wait as WaitState;
+    }
+
+    let openResult: unknown;
+    let alreadyRunning = false;
     try {
-      output(await editorOpen({ project: args.project, skipPrecompile: args.skipPrecompile }));
+      openResult = await editorOpen({ project: args.project, skipPrecompile: args.skipPrecompile });
     } catch (e: any) {
       const kind = e.kind ?? "ipc_error";
-      output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
-      process.exit(1);
+      // With --wait set, treat 'already running' as idempotent ready-sync:
+      // skip spawn and proceed to wait. This is the canonical agent ready
+      // signal — callers shouldn't have to know whether the editor was up
+      // before invoking. All other open errors still abort.
+      if (waitTarget !== null && kind === "editor_running") {
+        alreadyRunning = true;
+        openResult = { opened: false, already_running: true, pid: e.pid ?? null };
+      } else {
+        output({ ok: false, error: { kind, message: e.message, hint_command: lookupHintCommand(kind) } });
+        process.exit(1);
+      }
     }
+
+    if (waitTarget === null) {
+      // Fire-and-forget — return immediately as before.
+      output(openResult);
+      return;
+    }
+
+    // Already-running + --wait reachable short-circuit: a single /health probe
+    // is authoritative for "IPC handler is registered, callers can send
+    // commands". Bypass the wait engine here — the engine's reachable
+    // predicate also checks phase_override, which flips to 'unresponsive' when
+    // the editor is unfocused (Unity throttles EditorApplication.update so
+    // heartbeat stalls). That's a false negative for ready-sync since the IPC
+    // channel is fully functional. Cold-starts (alreadyRunning=false) and
+    // non-reachable wait targets (idle/playing/etc) still go through the
+    // engine because their semantics genuinely depend on phase observation.
+    if (alreadyRunning && waitTarget === "reachable") {
+      const probeStart = Date.now();
+      try {
+        const h = (await health({ project: args.project })) as { handler_registered?: boolean };
+        if (h?.handler_registered === true) {
+          output({
+            ok: true,
+            ...(openResult as Record<string, unknown>),
+            wait: {
+              state: waitTarget,
+              elapsed_ms: Date.now() - probeStart,
+              short_circuit: "already_running",
+            },
+          });
+          return;
+        }
+      } catch {
+        // /health unreachable — fall through to wait engine which will poll.
+      }
+    }
+
+    // Recover --timeout if citty lost it to --wait.
+    let timeoutRaw = args.timeout as string | undefined;
+    if (timeoutRaw === undefined) {
+      const idx = rawArgs.indexOf("--timeout");
+      if (idx >= 0 && idx + 1 < rawArgs.length && !rawArgs[idx + 1].startsWith("--")) {
+        timeoutRaw = rawArgs[idx + 1];
+      }
+    }
+
+    let timeoutSeconds: number;
+    if (timeoutRaw !== undefined) {
+      const parsed = parseDuration(timeoutRaw);
+      if (Number.isNaN(parsed)) {
+        output({
+          ok: false,
+          error: {
+            kind: "invalid_param",
+            message: `Cannot parse --timeout '${timeoutRaw}'. Expected forms: 30s, 2m, 1h, bare integer, or 0.`,
+            hint_command: lookupHintCommand("invalid_param"),
+          },
+        });
+        process.exit(2);
+      }
+      timeoutSeconds = parsed;
+    } else {
+      timeoutSeconds = lookupTimeoutDefault("editor.open", waitTarget);
+    }
+
+    const outcome = await runWait({
+      state: waitTarget,
+      timeoutSeconds,
+      project: args.project,
+    });
+    const waitEnv = outcomeToEnvelope(outcome);
+    if (waitEnv.ok) {
+      output({
+        ok: true,
+        ...(openResult as Record<string, unknown>),
+        wait: {
+          state: waitEnv.state,
+          phase: waitEnv.phase,
+          alive_ms_ago: waitEnv.alive_ms_ago,
+          elapsed_ms: waitEnv.elapsed_ms,
+        },
+      });
+      return;
+    }
+    // Wait failed after spawn succeeded — surface both for diagnostics.
+    output({
+      ok: false,
+      ...(openResult as Record<string, unknown>),
+      state: waitEnv.state,
+      elapsed_ms: waitEnv.elapsed_ms,
+      error: waitEnv.error,
+    });
+    process.exit(waitEnv.error?.exit_code ?? 1);
   },
 });
 
