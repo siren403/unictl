@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.1] - 2026-05-07
+
 ### Fixed
 - Documentation: clarified that `unictl command` is the canonical
   dispatcher for consumer-defined `[UnictlTool]` classes and stays in
