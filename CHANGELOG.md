@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.2] - 2026-05-07
+
 ### Fixed (critical — v0.7.0 and v0.7.1 are broken on npm/UPM)
 
 The release pipeline never rebuilt the native bridge before assembling
