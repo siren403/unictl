@@ -47,6 +47,9 @@ tools/unictl/
 Rules:
 
 - All versioned metadata is synchronized by `scripts/release.ts`.
+- `scripts/release.ts` stages the full repository with `git add -A` for the
+  release commit. Before releasing, keep only changes intended for that release
+  in the worktree; move unrelated experiments out or commit them separately.
 - Do not manually edit release version fields unless deliberately debugging the release script.
 - Keep `[Unreleased]` in `CHANGELOG.md` populated before release.
 - Run `mise run release:dry-run -- <version>` before any real publish.

@@ -13,7 +13,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ---
 
-## [0.7.6] - 2026-05-14
+## [0.7.7] - 2026-05-14
+
+### Fixed
+
+- Made the release process stage the full repository with `git add -A` and
+  assert a clean tree after the release commit, so npm publish and git tags
+  cannot silently omit source, validation, or documentation changes.
 
 ---
 

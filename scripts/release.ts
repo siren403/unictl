@@ -16,7 +16,7 @@
  * Safe release order (eliminates orphan-tag risk):
  *   1. Bump version in all package.json + integration metadata files
  *   2. Validate CHANGELOG.md + promote [Unreleased] → [v<ver>] + update ROADMAP.md header
- *   3. git add + commit "release: v<ver>"  (local only)
+ *   3. git add -A + commit "release: v<ver>"  (local only)
  *   4. npm publish packages/cli  (skip if --no-publish or --dry-run)
  *   5. git push origin main      (skip if --dry-run)
  *   6. git tag v<ver>            (skip if --dry-run)
@@ -54,17 +54,6 @@ const VERSIONED_CLI = [
 ];
 
 const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS, ...VERSIONED_CLI];
-
-const RELEASE_MANAGED_FILES = [
-  ...ALL_VERSIONED,
-  join(ROOT, ".mise.toml"),
-  join(ROOT, "AGENTS.md"),
-  join(ROOT, "packages/cli/src/cli.ts"),
-  join(ROOT, "packages/cli/src/help-json.ts"),
-  join(ROOT, "scripts/check-error-registry.ts"),
-  join(ROOT, "scripts/release.ts"),
-  join(ROOT, "docs/standalone/agent-discovery.md"),
-];
 
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
 const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
@@ -176,6 +165,39 @@ function run(cmd: string[], opts?: { cwd?: string }): void {
   });
   if (result.exitCode !== 0) {
     console.error(`\n  Failed: ${cmd.join(" ")}\n`);
+    process.exit(1);
+  }
+}
+
+function gitOutput(args: string[]): string {
+  const result = Bun.spawnSync(["git", ...args], {
+    cwd: ROOT,
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  if (result.exitCode !== 0) {
+    console.error(result.stderr.toString());
+    console.error(`\n  Failed: git ${args.join(" ")}\n`);
+    process.exit(1);
+  }
+  return result.stdout.toString();
+}
+
+function assertCleanWorkingTree(context: string): void {
+  const status = gitOutput(["status", "--porcelain"]);
+  if (status.trim().length > 0) {
+    console.error(`\n  ERROR: working tree is not clean ${context}.`);
+    console.error("  Dirty paths:");
+    console.error(status);
+    console.error("  The release commit, npm publish, and git tag must all refer to the same source state.\n");
+    process.exit(1);
+  }
+}
+
+function assertStagedChanges(): void {
+  const staged = gitOutput(["diff", "--cached", "--name-only"]);
+  if (staged.trim().length === 0) {
+    console.error("\n  ERROR: release produced no staged changes to commit.\n");
     process.exit(1);
   }
 }
@@ -377,10 +399,10 @@ if (isDryRun) {
 
 // Step 3: local commit
 console.log("  Step 4: git commit (local)");
-const filesToAdd = [...RELEASE_MANAGED_FILES, CHANGELOG_PATH];
-if (existsSync(ROADMAP_PATH)) filesToAdd.push(ROADMAP_PATH);
-run(["git", "add", ...filesToAdd]);
+run(["git", "add", "-A"]);
+assertStagedChanges();
 run(["git", "commit", "-m", `release: v${next}`]);
+assertCleanWorkingTree("after creating the release commit");
 
 if (!skipPublish) {
   // Step 4: npm publish

@@ -7,7 +7,9 @@ the step order, and recovery procedures for partial-release failures.
 
 - npm automation token configured (interactive 2FA breaks the release script).
 - `CHANGELOG.md` has a populated `[Unreleased]` section with at least one bullet entry.
-- Working tree is clean (`git status` shows no uncommitted changes).
+- `git status` contains only changes intended for this release. The release
+  script stages the full repo with `git add -A` so the release commit, npm
+  publish, and git tag refer to the same source state.
 
 ## The 5-Step Release Order
 
@@ -28,7 +30,7 @@ The script executes these steps in order:
 | 1 | Version sync: bump `version` in all `package.json` files and integration metadata | — |
 | 2 | Validate `CHANGELOG.md`: abort if `[Unreleased]` section is missing or empty | — |
 | 3 | Assemble integration artifacts (`assemble.ts`): build Codex/Claude zips + checksums | — |
-| 4 | `git commit "release: v<ver>"` (local only) | — |
+| 4 | `git add -A` + `git commit "release: v<ver>"` (local only) | — |
 | 5 | `npm publish packages/cli --access public` | `--no-publish`, `--dry-run` |
 | 6 | `git push origin main` | `--dry-run` |
 | 7 | `git tag v<ver>` | `--dry-run` |
@@ -44,6 +46,12 @@ and re-running the script is safe (idempotency guard at the top checks whether
 If publish succeeds but a subsequent git step fails, the artifact is public but the
 source commit is not yet visible on GitHub. This is a narrow window (see below) with
 documented manual recovery steps.
+
+The release script stages the entire repository, not a hand-maintained file
+allowlist. This prevents partial releases where npm was published from the
+working tree but the git tag omitted source, validation, or documentation files.
+Before running a release, move unrelated local experiments out of the worktree
+or commit them separately.
 
 ## Flags
 
