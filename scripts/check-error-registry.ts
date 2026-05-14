@@ -207,6 +207,10 @@ interface CapabilitiesJson {
 
 const capabilitiesPath = join(repoRoot, "packages", "cli", "src", "capabilities.json");
 const capabilities: CapabilitiesJson = JSON.parse(readFileSync(capabilitiesPath, "utf-8"));
+const schemaPath = join(repoRoot, "packages", "cli", "src", "schema.ts");
+const schemaSource = readFileSync(schemaPath, "utf-8");
+const schemaCommandMatches = [...schemaSource.matchAll(/^\s*"([^"]+)":\s*\{\s*$/gm)].map((m) => m[1]);
+const schemaCommands = new Set(schemaCommandMatches);
 
 // Assert: every emits_error_kinds entry in capabilities.json exists in error-registry.json
 const capsMissingFromRegistry: string[] = [];
@@ -233,6 +237,7 @@ function hasCapabilityCommand(path: string): boolean {
 }
 
 const requiredCapabilityCommands = [
+  "schema",
   "describe-all",
   "editor.status",
   "editor.quit",
@@ -253,6 +258,34 @@ for (const commandPath of requiredCapabilityCommands) {
   if (!hasCapabilityCommand(commandPath)) {
     failures.push(`CAPABILITIES COMMAND DRIFT: missing command path "${commandPath}"`);
   }
+}
+
+const requiredSchemaCommands = [
+  "schema",
+  "command",
+  "editor.status",
+  "editor.quit",
+  "editor.open",
+  "editor.restart",
+  "editor.compile",
+  "editor.play",
+  "editor.stop",
+  "editor.refresh",
+  "input.set",
+  "deploy.android.keystore.set",
+  "scripting.set",
+  "settings.raw-set",
+  "wait",
+];
+
+for (const commandPath of requiredSchemaCommands) {
+  if (!schemaCommands.has(commandPath)) {
+    failures.push(`SCHEMA COMMAND DRIFT: missing command schema "${commandPath}"`);
+  }
+}
+
+if (!schemaSource.includes("unictl schema") || !schemaSource.includes("CommandSchema")) {
+  failures.push("SCHEMA SURFACE DRIFT: schema.ts must expose CommandSchema metadata and point agents to 'unictl schema'");
 }
 
 // Assert: capabilities.json unictl_version matches root package.json version

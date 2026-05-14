@@ -3,6 +3,9 @@
  *
  * unictl --help --json          → top-level view: version + subcommands
  * unictl <cmd> --help --json    → subcommand view: name + flags + exit_codes
+ *
+ * Compatibility note: command contracts live under `unictl schema`. This
+ * formatter remains a structured help surface, not the command contract source.
  */
 import caps from "./capabilities.json" assert { type: "json" };
 import { getCliPackageMeta } from "./meta";
@@ -45,7 +48,14 @@ export function formatHelpJson(
       name: sc.name,
       description: sc.description,
     }));
-    return { version, subcommands };
+    return {
+      version,
+      agent_automation: {
+        command_contracts: ["unictl schema", "unictl schema <command>"],
+        warning: "Do not parse human help output for flags, risks, or exit codes.",
+      },
+      subcommands,
+    };
   }
 
   // Subcommand view
@@ -79,6 +89,7 @@ export function formatHelpJson(
   return {
     name: cmdName,
     description: sc?.description ?? "",
+    replacement: `unictl schema ${cmdName}`,
     flags,
     exit_codes: caps.exit_codes as ExitCodeEntry[],
   };

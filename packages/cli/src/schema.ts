@@ -1,13 +1,12 @@
-// Phase C-describe of unictl v0.7 — `--describe` metadata schema + registry.
+// Machine-readable command contract schema + registry.
 //
-// Per critic 4.0: --describe is the canonical agent metadata channel for v0.7.
-// `--help --json` becomes an alias and is scheduled for removal in v1.0.
-//
-// Each v0.7 verb-noun command attaches its DescribeMetadata via this registry;
-// the `--describe` flag handler emits the metadata as JSON and exits 0 without
-// running the command body.
+// `unictl schema` is the canonical agent metadata channel. Human help output
+// routes agents here, but the schema command is the only stable surface for
+// flags, risks, examples, exit codes, and command stability.
 
-export interface DescribeArg {
+import { getCliPackageMeta } from "./meta";
+
+export interface CommandSchemaArg {
   name: string;
   type: "string" | "int" | "bool" | "enum" | "path" | "duration" | "positional";
   enumValues?: readonly string[];
@@ -16,12 +15,12 @@ export interface DescribeArg {
   description: string;
 }
 
-export interface DescribeExample {
+export interface CommandSchemaExample {
   cmd: string;
   intent: string;
 }
 
-export interface DescribeMetadata {
+export interface CommandSchema {
   schema_version: 1;
   /** Canonical id for cross-version correlation, e.g. "editor.play" */
   name: string;
@@ -35,17 +34,17 @@ export interface DescribeMetadata {
   when: readonly string[];
   /** Anti-trigger conditions — MUST be non-empty per A1/critic 1.5 */
   when_not: readonly string[];
-  args: readonly DescribeArg[];
-  examples: readonly DescribeExample[];
+  args: readonly CommandSchemaArg[];
+  examples: readonly CommandSchemaExample[];
   exit_codes: readonly number[];
-  /** Related command names (matches `name` field in their describe) */
+  /** Related command names (matches `name` field in their schema) */
   related: readonly string[];
   since_version: string;
   stability: "stable" | "beta" | "experimental";
 }
 
 const SINCE = "0.7.0";
-const COMMON_ARGS: readonly DescribeArg[] = [
+const COMMON_ARGS: readonly CommandSchemaArg[] = [
   {
     name: "project",
     type: "string",
@@ -59,13 +58,6 @@ const COMMON_ARGS: readonly DescribeArg[] = [
     required: false,
     description: "Force JSON output (default ON for v0.7); use --no-json or UNICTL_HUMAN=1 for human output",
   },
-  {
-    name: "describe",
-    type: "bool",
-    default: false,
-    required: false,
-    description: "Emit this metadata as JSON instead of running the command",
-  },
 ];
 
 /**
@@ -73,7 +65,7 @@ const COMMON_ARGS: readonly DescribeArg[] = [
  * of COMMON_ARGS. State is optional — omitting it uses the verb-specific
  * F.3 default (compile/refresh/stop → idle, play → playing).
  */
-const EDITOR_WAIT_ARGS: readonly DescribeArg[] = [
+const EDITOR_WAIT_ARGS: readonly CommandSchemaArg[] = [
   {
     name: "wait",
     type: "enum",
@@ -92,7 +84,7 @@ const EDITOR_WAIT_ARGS: readonly DescribeArg[] = [
 
 const COMMON_EXIT_CODES: readonly number[] = [0, 1, 2, 78, 124, 125, 126];
 
-export const v07Describes: Record<string, DescribeMetadata> = {
+export const commandSchemas: Record<string, CommandSchema> = {
   "editor.compile": {
     schema_version: 1,
     name: "editor.compile",
@@ -187,6 +179,106 @@ export const v07Describes: Record<string, DescribeMetadata> = {
     related: ["editor.compile", "editor.status", "wait"],
     since_version: SINCE,
     stability: "beta",
+  },
+  "editor.status": {
+    schema_version: 1,
+    name: "editor.status",
+    verb: "status",
+    noun: "editor",
+    summary: "Report whether the Unity editor is running and whether the IPC endpoint is reachable.",
+    when: [
+      "Checking current editor process and IPC health before sending live-editor commands.",
+      "Diagnosing project/pipe mismatches.",
+    ],
+    when_not: [
+      "You need to wait for a future state transition — use `unictl wait <state>`.",
+    ],
+    args: [...COMMON_ARGS],
+    examples: [
+      { cmd: "unictl editor status --project D:/workspace/unity/MyProject", intent: "check editor process and IPC endpoint status" },
+    ],
+    exit_codes: [0, 1],
+    related: ["health", "wait"],
+    since_version: "0.1.0",
+    stability: "stable",
+  },
+  "editor.open": {
+    schema_version: 1,
+    name: "editor.open",
+    verb: "open",
+    noun: "editor",
+    summary: "Open the Unity editor and optionally wait for a target state.",
+    when: [
+      "Starting a project editor session for live IPC commands.",
+      "Agent automation needs a ready-sync signal before sending editor-lane commands.",
+    ],
+    when_not: [
+      "You only need a headless compile — use `unictl compile`.",
+      "The editor is already running and you do not need a ready-sync check — use `unictl editor status`.",
+    ],
+    args: [
+      ...COMMON_ARGS,
+      { name: "skip-precompile", type: "bool", default: false, required: false, description: "Skip the batchmode precompile check before opening the editor." },
+      { name: "wait", type: "enum", enumValues: ["idle", "playing", "compiling", "reloading", "reachable"], required: false, description: "Wait for editor state after spawn. Bare --wait defaults to reachable." },
+      { name: "timeout", type: "duration", default: "auto", required: false, description: "Wait timeout (e.g. 30s, 2m, 0 unbounded)." },
+    ],
+    examples: [
+      { cmd: "unictl editor open --wait reachable --timeout 300s", intent: "open editor and wait until IPC handler is registered" },
+      { cmd: "unictl editor open --skip-precompile", intent: "open without the batchmode precompile guard" },
+    ],
+    exit_codes: [0, 1, 2, 3, 124, 125],
+    related: ["editor.status", "wait", "health"],
+    since_version: "0.1.0",
+    stability: "stable",
+  },
+  "editor.quit": {
+    schema_version: 1,
+    name: "editor.quit",
+    verb: "quit",
+    noun: "editor",
+    summary: "Quit the Unity editor gracefully, with optional timeout before force fallback.",
+    when: [
+      "Closing a live editor before ProjectSettings mutations or batchmode work.",
+      "Cleaning up a sandbox smoke test editor session.",
+    ],
+    when_not: [
+      "A build or test job is currently running unless the caller intentionally aborts that session.",
+    ],
+    args: [
+      ...COMMON_ARGS,
+      { name: "force", type: "bool", default: false, required: false, description: "Allow force kill if graceful quit does not complete." },
+      { name: "timeout", type: "duration", default: "15s", required: false, description: "Graceful quit ceiling before fallback." },
+    ],
+    examples: [
+      { cmd: "unictl editor quit --timeout 30s", intent: "gracefully close the editor and wait for PID exit" },
+    ],
+    exit_codes: [0, 1, 2, 3],
+    related: ["editor.open", "editor.status"],
+    since_version: "0.1.0",
+    stability: "stable",
+  },
+  "editor.restart": {
+    schema_version: 1,
+    name: "editor.restart",
+    verb: "restart",
+    noun: "editor",
+    summary: "Restart the Unity editor by quitting and opening it again.",
+    when: [
+      "Applying lifecycle changes that require a full editor restart.",
+      "Recovering a live editor session after package import or settings changes.",
+    ],
+    when_not: [
+      "You only need a script recompile — use `unictl editor compile`.",
+      "The editor is running a long build or test job.",
+    ],
+    args: [...COMMON_ARGS],
+    examples: [
+      { cmd: "unictl editor restart --project D:/workspace/unity/MyProject", intent: "close and reopen the project editor" },
+    ],
+    exit_codes: [0, 1, 2, 3, 125],
+    related: ["editor.quit", "editor.open", "editor.status"],
+    since_version: "0.1.0",
+    stability: "stable",
   },
   "input.set": {
     schema_version: 1,
@@ -321,8 +413,8 @@ export const v07Describes: Record<string, DescribeMetadata> = {
       "Enumerating all installed `[UnictlTool]` registrations at runtime via `unictl command list`.",
     ],
     when_not: [
-      "A v0.7 verb-noun equivalent exists (editor.compile/play/stop/refresh, input.set, scripting.set, deploy.android.keystore.set, settings.raw-set, wait, describe-all). Prefer the verb-noun form — v1.0 hard-removes those specific `command <tool>` invocation patterns even though the dispatcher itself stays.",
-      "You only need static (offline) discovery of v0.7 verbs — use `unictl describe-all` instead, which returns metadata without an editor running.",
+      "A v0.7 verb-noun equivalent exists (editor.compile/play/stop/refresh, input.set, scripting.set, deploy.android.keystore.set, settings.raw-set, wait, schema). Prefer the verb-noun form — v1.0 hard-removes those specific `command <tool>` invocation patterns even though the dispatcher itself stays.",
+      "You only need static (offline) discovery of v0.7 verbs — use `unictl schema` instead, which returns metadata without an editor running.",
     ],
     args: [
       ...COMMON_ARGS,
@@ -334,10 +426,10 @@ export const v07Describes: Record<string, DescribeMetadata> = {
       { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the file-based Editor.log" },
       { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
       { cmd: "unictl command my_save_inspector -p target=Player", intent: "invoke a consumer-defined [UnictlTool]" },
-      { cmd: "unictl command --describe", intent: "emit this metadata as JSON" },
+      { cmd: "unictl schema command", intent: "emit this command contract as JSON" },
     ],
     exit_codes: [0, 1, 2, 3, 124, 125],
-    related: ["describe-all", "doctor", "health"],
+    related: ["schema", "doctor", "health"],
     since_version: "0.1.0",
     stability: "stable",
   },
@@ -368,22 +460,47 @@ export const v07Describes: Record<string, DescribeMetadata> = {
     since_version: SINCE,
     stability: "beta",
   },
+  "schema": {
+    schema_version: 1,
+    name: "schema",
+    verb: "schema",
+    noun: "",
+    summary: "Emit machine-readable command contracts for agents and automation.",
+    when: [
+      "Before scripting a unictl command or changing automation that calls unictl.",
+      "When an agent needs flags, risk conditions, examples, exit codes, or stability without parsing human help.",
+    ],
+    when_not: [
+      "You need human-oriented usage text — use `unictl --help` or `unictl <command> --help`.",
+    ],
+    args: [
+      { name: "command", type: "positional", required: false, description: "Canonical command name such as editor.open, editor.compile, input.set. Omit for all commands." },
+    ],
+    examples: [
+      { cmd: "unictl schema", intent: "emit all command contracts" },
+      { cmd: "unictl schema input.set", intent: "inspect the input settings lifecycle contract" },
+    ],
+    exit_codes: [0, 2],
+    related: ["capabilities"],
+    since_version: "0.7.8",
+    stability: "beta",
+  },
 };
 
 /**
- * Look up describe metadata by canonical name. Returns null if unknown.
+ * Look up command schema by canonical name. Returns null if unknown.
  */
-export function lookupDescribe(name: string): DescribeMetadata | null {
-  return v07Describes[name] ?? null;
+export function lookupCommandSchema(name: string): CommandSchema | null {
+  return commandSchemas[name] ?? null;
 }
 
 /**
- * Aggregator: emit every v0.7 verb describe as one JSON document. Used by
- * `unictl list --describe-all` (added in C-mapping sub-PR or later).
+ * Aggregator: emit every v0.7 command contract as one JSON document.
  */
-export function describeAll(): { schema_version: 1; commands: DescribeMetadata[] } {
+export function schemaAll(): { schema_version: 1; unictl_version: string; commands: CommandSchema[] } {
   return {
     schema_version: 1,
-    commands: Object.values(v07Describes),
+    unictl_version: getCliPackageMeta().version,
+    commands: Object.values(commandSchemas),
   };
 }

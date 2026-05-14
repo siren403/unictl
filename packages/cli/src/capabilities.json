@@ -33,8 +33,14 @@
       "help": "unictl command list (requires live editor)"
     },
     {
+      "name": "schema",
+      "description": "Emit machine-readable command contracts for agents and automation.",
+      "key_flags": [],
+      "help": "unictl schema"
+    },
+    {
       "name": "describe-all",
-      "description": "Emit canonical agent metadata for every v0.7 verb-noun command.",
+      "description": "Deprecated alias for unictl schema.",
       "key_flags": [],
       "help": "unictl describe-all"
     },
@@ -100,7 +106,7 @@
             "--timeout"
           ],
           "help": "unictl editor compile --help",
-          "describe": "unictl editor compile --describe"
+          "schema": "unictl schema editor.compile"
         },
         {
           "name": "play",
@@ -111,7 +117,7 @@
             "--timeout"
           ],
           "help": "unictl editor play --help",
-          "describe": "unictl editor play --describe"
+          "schema": "unictl schema editor.play"
         },
         {
           "name": "stop",
@@ -122,7 +128,7 @@
             "--timeout"
           ],
           "help": "unictl editor stop --help",
-          "describe": "unictl editor stop --describe"
+          "schema": "unictl schema editor.stop"
         },
         {
           "name": "refresh",
@@ -133,7 +139,7 @@
             "--timeout"
           ],
           "help": "unictl editor refresh --help",
-          "describe": "unictl editor refresh --describe"
+          "schema": "unictl schema editor.refresh"
         }
       ]
     },
@@ -171,7 +177,7 @@
             "--restart"
           ],
           "help": "unictl input set --help",
-          "describe": "unictl input set --describe"
+          "schema": "unictl schema input.set"
         }
       ]
     },
@@ -208,7 +214,7 @@
                     "--alias"
                   ],
                   "help": "unictl deploy android keystore set --help",
-                  "describe": "unictl deploy android keystore set --describe"
+                  "schema": "unictl schema deploy.android.keystore.set"
                 }
               ]
             }
@@ -233,7 +239,7 @@
             "--platform"
           ],
           "help": "unictl scripting set --help",
-          "describe": "unictl scripting set --describe"
+          "schema": "unictl schema scripting.set"
         }
       ]
     },
@@ -253,7 +259,7 @@
             "--no-warranty"
           ],
           "help": "unictl settings raw-set --help",
-          "describe": "unictl settings raw-set --describe"
+          "schema": "unictl schema settings.raw-set"
         }
       ]
     },
@@ -265,7 +271,7 @@
         "--timeout"
       ],
       "help": "unictl wait --help",
-      "describe": "unictl wait --describe"
+      "schema": "unictl schema wait"
     },
     {
       "name": "version",

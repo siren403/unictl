@@ -65,7 +65,7 @@ mise run check
 
 For narrower changes:
 
-- CLI/error registry/capabilities: `mise run check:error-registry`
+- CLI/error registry/schema/capabilities: `mise run check:error-registry`
 - Unity UPM package files or `.meta` changes: `mise run check:meta-guids`
 - Release path: `mise run release:dry-run -- <version>`
 
@@ -74,17 +74,23 @@ For narrower changes:
 - Structured command discovery is a release contract. Keep
   `docs/standalone/agent-discovery.md` in sync with command and flag changes.
 - When adding, removing, renaming, or changing flags on CLI commands, update
-  `cli.ts`, `describe.ts`, `capabilities.json`, and `help-json.ts` together as
+  `cli.ts`, `schema.ts`, `capabilities.json`, and `help-json.ts` together as
   applicable.
-- Verify nested commands through structured surfaces, not only human `--help`.
+- Use human `--help` to find the schema entrypoint, then verify command
+  contracts through `unictl schema` rather than parsing help text.
   Required spot checks:
+  - `mise run unictl -- --help`
+  - `mise run unictl -- schema`
+  - `mise run unictl -- schema editor.open`
+  - `mise run unictl -- schema input.set`
+  - `mise run unictl -- capabilities`
+- Compatibility spot checks while legacy discovery aliases exist:
   - `mise run unictl -- --help --json`
   - `mise run unictl -- describe-all`
-  - `mise run unictl -- capabilities`
   - `mise run unictl -- editor compile --help --json`
   - `mise run unictl -- deploy android keystore set --help --json`
-- Treat a command that works interactively but is missing from `--describe`,
-  `describe-all`, `capabilities`, or `--help --json` as a release-blocking
+- Treat a command that works interactively but is missing from `schema`,
+  `capabilities`, or compatibility `--help --json` as a release-blocking
   agent-discovery regression.
 
 ## Unity Asset `.meta` Rules
@@ -104,7 +110,7 @@ For narrower changes:
 ## Common Pitfalls
 
 - Do not trust human `--help` alone when checking whether agents can find a
-  command. Check `--describe`, `describe-all`, `capabilities`, and
+  command. Check `schema`, `capabilities`, and compatibility
   `--help --json`; see `docs/standalone/agent-discovery.md`.
 - Avoid `bunx github:repo` for release validation; Bun caches git refs aggressively. Prefer npm versions such as `bunx unictl@0.6.3`.
 - Do not add a `dist/` build output. Bun runs TypeScript directly.

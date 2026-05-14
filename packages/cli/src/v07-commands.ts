@@ -17,7 +17,7 @@
 import { defineCommand } from "citty";
 import { command as ipcCommand } from "./client";
 import { emit, exitCodeFor, type OutputFlags } from "./output";
-import { lookupDescribe } from "./describe";
+import { lookupCommandSchema } from "./schema";
 import { errorEnvelope } from "./error";
 import {
   WAIT_STATES,
@@ -61,7 +61,7 @@ const v07GlobalArgs = {
   },
   describe: {
     type: "boolean",
-    description: "Emit canonical agent metadata (DescribeMetadata) as JSON and exit without running the command",
+    description: "Deprecated alias for `unictl schema <command>`.",
   },
 } as const;
 
@@ -72,17 +72,14 @@ function readFlags(args: Record<string, unknown>): OutputFlags {
 }
 
 /**
- * Short-circuit: if `--describe` is set, emit the metadata for `name` and
+ * Short-circuit: if legacy `--describe` is set, emit the schema for `name` and
  * exit 0. Returns true if the command should NOT continue executing.
- *
- * Per critic 4.0 + C-describe: --describe is the canonical agent metadata
- * channel. If a command name is missing from the registry the caller falls
- * back to its normal path (so a typo here doesn't silently break the verb).
  */
 function maybeEmitDescribe(name: string, args: Record<string, unknown>, flags: OutputFlags): boolean {
   if (args.describe !== true) return false;
-  const meta = lookupDescribe(name);
+  const meta = lookupCommandSchema(name);
   if (!meta) return false;
+  process.stderr.write(`[deprecated] --describe is deprecated; use 'unictl schema ${name}'.\n`);
   emit("new", meta, flags);
   process.exit(0);
 }
@@ -504,7 +501,7 @@ const scriptingSetCmd = defineCommand({
     if (!platformYaml) {
       const env = errorEnvelope({
         kind: "target_unsupported",
-        message: `Unknown platform '${args.platform}'. See 'unictl scripting set --describe'.`,
+        message: `Unknown platform '${args.platform}'. See 'unictl schema scripting.set'.`,
         related: ["scripting.set"],
         context: { platform: args.platform },
       });
@@ -695,7 +692,7 @@ const waitCmd = defineCommand({
       const env = errorEnvelope({
         kind: "invalid_param",
         message: `Unknown state '${state}'. Valid: ${WAIT_STATES.join(", ")}.`,
-        recovery: "Pass one of the supported states or 'unictl wait --describe' for details.",
+        recovery: "Pass one of the supported states or 'unictl schema wait' for details.",
         related: ["wait"],
         context: { state, valid_states: WAIT_STATES },
       });

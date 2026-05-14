@@ -10,7 +10,7 @@ import { runCompile } from "./compile";
 import { testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
-import { describeAll, lookupDescribe } from "./describe";
+import { schemaAll, lookupCommandSchema } from "./schema";
 import {
   WAIT_STATES,
   type WaitState,
@@ -734,6 +734,13 @@ const compileCmd = defineCommand({
   },
 });
 
+const AGENT_HELP_BANNER = `Agent / automation:
+  Machine-readable command contracts:
+    unictl schema
+    unictl schema <command>
+
+  Do not parse human help output for flags, risks, or exit codes.`;
+
 // v0.6 → v0.7 verb-noun migration hints. When a user invokes a legacy
 // `unictl command <tool> -p action=<act>` shape that has a v0.7 equivalent,
 // emit a one-line deprecation suggestion on stderr (does not change behavior).
@@ -745,7 +752,7 @@ const compileCmd = defineCommand({
 // consumer-defined `[UnictlTool]` registrations. v1.0 hard-removes only the
 // specific invocation patterns mapped below. `unictl command list` is NOT
 // deprecated — it is the canonical runtime discovery channel and is NOT
-// equivalent to `unictl describe-all` (which only covers v0.7 verb-noun).
+// equivalent to `unictl schema` (which only covers v0.7 verb-noun).
 function suggestV07Mapping(toolName: string, params: Record<string, unknown>): string | null {
   if (toolName === "editor_control") {
     const action = typeof params.action === "string" ? params.action : null;
@@ -781,19 +788,16 @@ const commandCmd = defineCommand({
     },
     describe: {
       type: "boolean",
-      description: "Emit canonical agent metadata (DescribeMetadata) for the command verb and exit without invoking the tool.",
+      description: "Deprecated alias for `unictl schema command`.",
     },
   },
   run: async ({ args, rawArgs }) => {
-    // v0.7.2: --describe is the canonical metadata channel for the command
-    // verb. The verb itself is permanent (custom [UnictlTool] dispatcher),
-    // and exposing its DescribeMetadata closes the dogfood discoverability
-    // gap that previously required reading C# source to learn the call shape.
-    // Per-tool metadata still flows through `unictl command list` at runtime;
-    // a future patch may layer per-tool --describe through an IPC enrichment.
+    // Legacy compatibility: command contract metadata moved to `unictl schema`.
+    // Per-tool metadata still flows through `unictl command list` at runtime.
     if (args.describe === true) {
-      const meta = lookupDescribe("command");
+      const meta = lookupCommandSchema("command");
       if (meta) {
+        process.stderr.write("[deprecated] --describe is deprecated; use 'unictl schema command'.\n");
         console.log(JSON.stringify(meta));
         process.exit(0);
       }
@@ -817,10 +821,47 @@ const commandCmd = defineCommand({
 const describeAllCmd = defineCommand({
   meta: {
     name: "describe-all",
-    description: "Emit canonical agent metadata (DescribeMetadata) for every v0.7 verb-noun command as one JSON document.",
+    description: "Deprecated alias for `unictl schema`.",
   },
   run: async () => {
-    console.log(JSON.stringify(describeAll()));
+    process.stderr.write("[deprecated] describe-all is deprecated; use 'unictl schema'.\n");
+    console.log(JSON.stringify(schemaAll()));
+  },
+});
+
+const schemaCmd = defineCommand({
+  meta: {
+    name: "schema",
+    description: "Emit machine-readable command contracts for agents and automation.",
+  },
+  args: {
+    command: {
+      type: "positional",
+      required: false,
+      description: "Canonical command name, e.g. editor.open, editor.compile, input.set. Omit for all commands.",
+    },
+  },
+  run: async ({ args }) => {
+    const commandName = typeof args.command === "string" ? args.command.trim() : "";
+    if (commandName.length === 0) {
+      console.log(JSON.stringify(schemaAll()));
+      return;
+    }
+
+    const meta = lookupCommandSchema(commandName);
+    if (!meta) {
+      output({
+        ok: false,
+        error: {
+          kind: "schema_not_found",
+          message: `No command schema found for '${commandName}'.`,
+          recovery: "Run 'unictl schema' to list available command contracts.",
+        },
+      });
+      process.exit(2);
+    }
+
+    console.log(JSON.stringify(meta));
   },
 });
 
@@ -954,6 +995,8 @@ const main = defineCommand({
     version: getCliPackageMeta().version,
     description: `Unity editor control CLI
 
+${AGENT_HELP_BANNER}
+
 QUICK START (run in order):
   1. unictl health                          # verify editor connection
   2. unictl command list                    # discover all tools and actions
@@ -971,6 +1014,7 @@ QUICK START (run in order):
     editor: editorCmd,
     health: healthCmd,
     init: initCmd,
+    schema: schemaCmd,
     test: testCmd,
     version: versionCmd,
     // v0.7 verb-noun additions (Phase C-skeleton). Stub bodies for now —
@@ -1000,10 +1044,13 @@ if (hasHelp && hasJson) {
   }
 
   for (let len = commandPath.length; len > 0; len--) {
-    const describeName = commandPath.slice(0, len).join(".");
-    const describeMeta = lookupDescribe(describeName);
-    if (describeMeta) {
-      console.log(JSON.stringify(describeMeta, null, 2));
+    const schemaName = commandPath.slice(0, len).join(".");
+    const schemaMeta = lookupCommandSchema(schemaName);
+    if (schemaMeta) {
+      console.log(JSON.stringify({
+        ...schemaMeta,
+        replacement: `unictl schema ${schemaName}`,
+      }, null, 2));
       process.exit(0);
     }
   }
@@ -1036,6 +1083,8 @@ if (hasHelp && hasJson) {
       ? {}
       : cmdName === "capabilities"
       ? {}
+      : cmdName === "schema"
+      ? schemaCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
       : cmdName === "test"
       ? testCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
       : undefined;
@@ -1059,6 +1108,25 @@ if (hasHelp && hasJson) {
 
   console.log(JSON.stringify(formatHelpJson(cmdName, subCmdArgsDef), null, 2));
   process.exit(0);
+}
+
+if (rawArgv.includes("--describe")) {
+  const commandPath: string[] = [];
+  for (const arg of rawArgv) {
+    if (arg === "--describe") continue;
+    if (arg.startsWith("-")) break;
+    commandPath.push(arg);
+  }
+
+  for (let len = commandPath.length; len > 0; len--) {
+    const schemaName = commandPath.slice(0, len).join(".");
+    const schemaMeta = lookupCommandSchema(schemaName);
+    if (schemaMeta) {
+      process.stderr.write(`[deprecated] --describe is deprecated; use 'unictl schema ${schemaName}'.\n`);
+      console.log(JSON.stringify(schemaMeta));
+      process.exit(0);
+    }
+  }
 }
 
 runMain(main, { rawArgs: normalizeKnownFlags(rawArgv) });

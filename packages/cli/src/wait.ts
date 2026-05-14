@@ -176,7 +176,7 @@ function effectivePhase(resp: LivenessResponse): { phase: string; unresponsive: 
 /**
  * Does the current /liveness response match the requested wait state?
  *
- * Rules (matches Phase A1 ADR + describe metadata):
+ * Rules (matches Phase A1 ADR + command schema metadata):
  *   - reachable: any successful response with handler_registered=true (the
  *     editor is up and the IPC handler is wired). Heartbeat state is not part
  *     of the reachable contract because /health and /command can be usable

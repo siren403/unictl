@@ -13,6 +13,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Added `unictl schema` as the canonical machine-readable command contract
+  surface for agents, routed root `--help` to it, and deprecated
+  `--describe` / `describe-all` as compatibility aliases.
 - Fixed `editor open --wait` and `wait reachable` so `reachable` resolves as
   soon as the IPC handler is registered. The previous predicate also required
   heartbeat state, which could hang even while `/health` and other IPC commands

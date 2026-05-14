@@ -54,7 +54,7 @@ export interface ErrorEnvelopeFields {
   message: string;
   /** Concrete next action the caller should take. Optional. */
   recovery?: string;
-  /** Names of related commands (matches DescribeMetadata.name). */
+  /** Names of related commands (matches CommandSchema.name). */
   related?: readonly string[];
   /** Structured payload for agent decision-making. */
   context?: Record<string, unknown>;
