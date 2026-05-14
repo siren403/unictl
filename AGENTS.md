@@ -118,3 +118,13 @@ For narrower changes:
 - Keep release commits, validation/tooling commits, and consumer-project experiments separate.
 - Do not revert unrelated dirty files from a parent Unity checkout.
 - When testing against external projects such as `D:/workspace/unity/SceneFlow`, treat their dirty worktree as owned by that project/session unless explicitly asked to change it.
+
+## Definition Of Done
+
+- For implementation tasks, do not report the work as complete until the change
+  is implemented, validated, documented as needed, and committed.
+- If the work addresses a GitHub issue, include a closing keyword in the commit
+  body, such as `Fixes #9` or `Closes #9`, so GitHub closes the issue when the
+  commit reaches the default branch.
+- If the user explicitly asks not to commit, stop after validation and state
+  that the task is not complete by this repository's default standard.

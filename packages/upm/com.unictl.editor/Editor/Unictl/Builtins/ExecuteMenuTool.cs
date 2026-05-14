@@ -13,6 +13,9 @@ namespace Unictl
 
             [ToolParameter("If true, execute synchronously and wait for completion (default: false). WARNING: long operations will block the pipe and cause CLI timeout.", Required = false)]
             public bool Sync { get; set; }
+
+            [ToolParameter("If true, execute synchronously and call AssetDatabase.SaveAssets after the menu item succeeds. Use for menus that mutate ProjectSettings/PlayerSettings and must be visible to external tools immediately.", Required = false)]
+            public bool FlushAssets { get; set; }
         }
 
         public static object HandleCommand(JObject parameters)
@@ -22,13 +25,23 @@ namespace Unictl
             if (!ok) return new ErrorResponse(error);
 
             var sync = p.GetBool("sync");
+            var flushAssets = p.GetBool("flush_assets");
 
-            if (sync)
+            if (sync || flushAssets)
             {
                 var result = EditorApplication.ExecuteMenuItem(menuPath);
                 if (!result)
                     return new ErrorResponse($"Menu item not found or failed: {menuPath}");
-                return new SuccessResponse($"Executed (sync): {menuPath}", new { menu_path = menuPath, async = false });
+                if (flushAssets)
+                {
+                    AssetDatabase.SaveAssets();
+                }
+                return new SuccessResponse($"Executed (sync): {menuPath}", new
+                {
+                    menu_path = menuPath,
+                    async = false,
+                    flush_assets = flushAssets
+                });
             }
 
             EditorApplication.delayCall += () =>

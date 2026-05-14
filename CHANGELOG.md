@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- Added `flush_assets` to the `execute_menu` builtin. When enabled, the menu
+  item runs synchronously and calls `AssetDatabase.SaveAssets()` before
+  returning, so PlayerSettings/ProjectSettings mutations can be observed by
+  external tools immediately.
+
 ---
 
 ## [0.7.7] - 2026-05-14
