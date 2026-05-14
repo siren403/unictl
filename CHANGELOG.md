@@ -13,6 +13,11 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Added an audit trail for `editor_control` `quit` and `restart` requests.
+  The editor now writes a structured `Debug.Log` line and a rolling
+  `Library/unictl-state/editor-control.log` JSONL file with caller metadata
+  such as client PID, CLI args, transport, request id, project root, and editor
+  session id.
 - Added `flush_assets` to the `execute_menu` builtin. When enabled, the menu
   item runs synchronously and calls `AssetDatabase.SaveAssets()` before
   returning, so PlayerSettings/ProjectSettings mutations can be observed by

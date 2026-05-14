@@ -4,6 +4,7 @@ import {
   resolveEndpointDescriptor,
   type EndpointDescriptor,
 } from "./socket";
+import { createIpcRequestMeta } from "./ipc-meta";
 
 function describeEndpoint(endpoint: EndpointDescriptor): string {
   if (endpoint.transport === "unix") {
@@ -35,9 +36,9 @@ function createEndpointUnavailableError(projectPath: string | undefined, endpoin
 async function requestJson(
   pathname: string,
   init: RequestInit | undefined,
-  opts?: { project?: string }
+  opts?: { project?: string; endpoint?: EndpointDescriptor }
 ): Promise<unknown> {
-  const endpoint = resolveEndpointDescriptor(opts?.project);
+  const endpoint = opts?.endpoint ?? resolveEndpointDescriptor(opts?.project);
 
   if (!endpointSeemsPresent(endpoint)) {
     throw createEndpointUnavailableError(opts?.project, endpoint);
@@ -56,18 +57,23 @@ export async function command(
   params?: Record<string, unknown>,
   opts?: { project?: string }
 ): Promise<unknown> {
+  const endpoint = resolveEndpointDescriptor(opts?.project);
+  const requestId = crypto.randomUUID();
   return requestJson(
     "/command",
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        id: crypto.randomUUID(),
+        id: requestId,
         command: cmd,
-        params: params ?? {},
+        params: {
+          ...(params ?? {}),
+          _meta: createIpcRequestMeta(endpoint, requestId),
+        },
       }),
     },
-    opts
+    { ...opts, endpoint }
   );
 }
 

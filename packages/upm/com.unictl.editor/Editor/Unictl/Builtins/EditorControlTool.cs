@@ -1,4 +1,7 @@
 using Newtonsoft.Json.Linq;
+using System;
+using System.IO;
+using System.Linq;
 using UnityEditor;
 using UnityEditor.SceneManagement;
 using UnityEditorInternal;
@@ -35,9 +38,9 @@ namespace Unictl.Tools
                 case "stop": return DoStop();
                 case "refresh": return DoRefresh();
                 case "compile": return DoCompile();
-                case "restart": return DoRestart();
+                case "restart": return DoRestart(p);
                 case "status": return GetStatus();
-                case "quit": return DoQuit();
+                case "quit": return DoQuit(p);
                 case "load_scene": return DoLoadScene(p);
                 default:
                     return new ErrorResponse($"Unknown action: {action}");
@@ -83,8 +86,10 @@ namespace Unictl.Tools
             return new SuccessResponse("Refresh requested", GetStateData());
         }
 
-        private static object DoRestart()
+        private static object DoRestart(ToolParams p)
         {
+            AuditEditorControl("restart", p);
+
             if (EditorApplication.isPlaying)
                 EditorApplication.isPlaying = false;
 
@@ -98,8 +103,9 @@ namespace Unictl.Tools
             return new SuccessResponse("Editor status", GetStateData());
         }
 
-        private static object DoQuit()
+        private static object DoQuit(ToolParams p)
         {
+            AuditEditorControl("quit", p);
             EditorApplication.Exit(0);
             return new SuccessResponse("Editor quitting");
         }
@@ -170,6 +176,64 @@ namespace Unictl.Tools
         {
             AssetDatabase.Refresh(ImportAssetOptions.ForceUpdate);
             UnityEditor.Compilation.CompilationPipeline.RequestScriptCompilation();
+        }
+
+        private static void AuditEditorControl(string action, ToolParams p)
+        {
+            var meta = p.GetRaw("_meta") as JObject;
+            var audit = new JObject
+            {
+                ["schema_version"] = 1,
+                ["at"] = DateTime.UtcNow.ToString("o"),
+                ["tool"] = "editor_control",
+                ["action"] = action,
+                ["editor_pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+                ["editor_session_id"] = UnictlServer.SessionId,
+                ["project_root"] = GetProjectRoot(),
+                ["client_pid"] = meta?["client_pid"],
+                ["transport"] = meta?["transport"],
+                ["transport_id"] = meta?["transport_id"],
+                ["request_id"] = meta?["request_id"],
+                ["sent_at"] = meta?["sent_at"],
+                ["cwd"] = meta?["cwd"],
+                ["cli_args"] = meta?["cli_args"] ?? new JArray()
+            };
+
+            var line = audit.ToString(Newtonsoft.Json.Formatting.None);
+            Debug.Log($"[Unictl][editor_control] audit {line}");
+            AppendAuditLine(line);
+        }
+
+        private static void AppendAuditLine(string line)
+        {
+            try
+            {
+                var path = GetAuditLogPath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.AppendAllText(path, line + Environment.NewLine);
+                TrimAuditLog(path, 200);
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[Unictl][editor_control] failed to write audit log: {e.Message}");
+            }
+        }
+
+        private static void TrimAuditLog(string path, int maxLines)
+        {
+            var lines = File.ReadAllLines(path);
+            if (lines.Length <= maxLines) return;
+            File.WriteAllLines(path, lines.Skip(lines.Length - maxLines).ToArray());
+        }
+
+        private static string GetAuditLogPath()
+        {
+            return Path.Combine(GetProjectRoot(), "Library", "unictl-state", "editor-control.log");
+        }
+
+        private static string GetProjectRoot()
+        {
+            return Path.GetDirectoryName(Application.dataPath);
         }
     }
 }

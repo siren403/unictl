@@ -147,7 +147,29 @@ unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
 
 ---
 
-## 7. Headless compile
+## 7. Editor control audit trail
+
+`editor_control` writes an audit event before destructive lifecycle actions:
+
+- `unictl editor quit`
+- `unictl editor restart`
+- `unictl command editor_control -p action=quit`
+- `unictl command editor_control -p action=restart`
+
+Each event is written to both `Editor.log` and the project-local JSONL file:
+
+```text
+Library/unictl-state/editor-control.log
+```
+
+The event includes caller metadata from the CLI request, including `client_pid`,
+`cli_args`, `cwd`, `transport`, `transport_id`, `request_id`, `project_root`,
+`editor_pid`, and `editor_session_id`. Use this file when investigating an
+unexpected editor quit or restart.
+
+---
+
+## 8. Headless compile
 
 `unictl compile` runs Unity script compilation in batchmode without a full build:
 
@@ -166,7 +188,7 @@ Exit code contract:
 
 ---
 
-## 8. Error recovery
+## 9. Error recovery
 
 Every failed response includes a `hint` field:
 
@@ -194,7 +216,7 @@ unictl health --project /abs/path/to/project
 
 ---
 
-## 9. CI integration
+## 10. CI integration
 
 Recommended batchmode pattern for CI pipelines:
 
@@ -234,7 +256,7 @@ Exit code contract for CI:
 
 ---
 
-## 10. IPC transport
+## 11. IPC transport
 
 | Platform | Transport | Protocol |
 |----------|-----------|----------|
@@ -246,7 +268,7 @@ files are required — both CLI and UPM package compute the same name from the s
 
 ---
 
-## 11. Agent integration packs
+## 12. Agent integration packs
 
 Codex and Claude Code integration packs are thin wrappers around these docs and the CLI.
 See `integrations/codex/` and `integrations/claude-code/` in the repo for pack contents.

@@ -9,6 +9,7 @@ import {
   resolveEndpointDescriptor,
   type EndpointDescriptor,
 } from "./socket";
+import { createIpcRequestMeta } from "./ipc-meta";
 import {
   getUnityPid,
   killProcess,
@@ -58,13 +59,17 @@ async function sendEditorControl(
   endpoint: EndpointDescriptor,
   params: Record<string, string>
 ): Promise<unknown> {
+  const requestId = crypto.randomUUID();
   const res = await fetchEndpoint(endpoint, "/command", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      id: crypto.randomUUID(),
+      id: requestId,
       command: "editor_control",
-      params,
+      params: {
+        ...params,
+        _meta: createIpcRequestMeta(endpoint, requestId),
+      },
     }),
   });
   return res.json();
