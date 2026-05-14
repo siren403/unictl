@@ -11,6 +11,8 @@ sandbox/*/UserSettings/
 sandbox/*/Build/
 sandbox/*/Builds/
 sandbox/*/obj/
+sandbox/*/.vscode/
 sandbox/*/*.csproj
 sandbox/*/*.sln
+sandbox/*/*.slnx
 sandbox/*/*.user
