@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "unictl_version": "0.7.3",
+  "unictl_version": "0.7.4",
   "subcommands": [
     {
       "name": "build",
@@ -33,6 +33,12 @@
       "help": "unictl command list (requires live editor)"
     },
     {
+      "name": "describe-all",
+      "description": "Emit canonical agent metadata for every v0.7 verb-noun command.",
+      "key_flags": [],
+      "help": "unictl describe-all"
+    },
+    {
       "name": "doctor",
       "description": "Environment diagnostics. Returns typed error.kind on failure.",
       "key_flags": [
@@ -42,11 +48,94 @@
     },
     {
       "name": "editor",
-      "description": "Unity editor lifecycle (status | open | quit | restart).",
+      "description": "Unity editor lifecycle and live editor control (status | open | quit | restart | compile | play | stop | refresh).",
       "key_flags": [
         "--project"
       ],
-      "help": "unictl editor --help"
+      "help": "unictl editor --help",
+      "subcommands": [
+        {
+          "name": "status",
+          "description": "Show Unity editor running status.",
+          "key_flags": [
+            "--project"
+          ],
+          "help": "unictl editor status --help"
+        },
+        {
+          "name": "open",
+          "description": "Open the Unity editor; supports --wait [idle|playing|compiling|reloading|reachable] and --timeout.",
+          "key_flags": [
+            "--project",
+            "--skip-precompile",
+            "--wait",
+            "--timeout"
+          ],
+          "help": "unictl editor open --help"
+        },
+        {
+          "name": "quit",
+          "description": "Quit the Unity editor.",
+          "key_flags": [
+            "--project",
+            "--force",
+            "--timeout"
+          ],
+          "help": "unictl editor quit --help"
+        },
+        {
+          "name": "restart",
+          "description": "Restart the Unity editor.",
+          "key_flags": [
+            "--project"
+          ],
+          "help": "unictl editor restart --help"
+        },
+        {
+          "name": "compile",
+          "description": "Trigger in-editor recompile; supports --wait [idle|playing|compiling|reloading|reachable] and --timeout.",
+          "key_flags": [
+            "--project",
+            "--wait",
+            "--timeout"
+          ],
+          "help": "unictl editor compile --help",
+          "describe": "unictl editor compile --describe"
+        },
+        {
+          "name": "play",
+          "description": "Enter Play Mode; supports --wait [idle|playing|compiling|reloading|reachable] and --timeout.",
+          "key_flags": [
+            "--project",
+            "--wait",
+            "--timeout"
+          ],
+          "help": "unictl editor play --help",
+          "describe": "unictl editor play --describe"
+        },
+        {
+          "name": "stop",
+          "description": "Exit Play Mode; supports --wait [idle|playing|compiling|reloading|reachable] and --timeout.",
+          "key_flags": [
+            "--project",
+            "--wait",
+            "--timeout"
+          ],
+          "help": "unictl editor stop --help",
+          "describe": "unictl editor stop --describe"
+        },
+        {
+          "name": "refresh",
+          "description": "Run AssetDatabase.Refresh; supports --wait [idle|playing|compiling|reloading|reachable] and --timeout.",
+          "key_flags": [
+            "--project",
+            "--wait",
+            "--timeout"
+          ],
+          "help": "unictl editor refresh --help",
+          "describe": "unictl editor refresh --describe"
+        }
+      ]
     },
     {
       "name": "health",
@@ -64,6 +153,119 @@
         "--repo-url"
       ],
       "help": "unictl init --help"
+    },
+    {
+      "name": "input",
+      "description": "Unity Input System lifecycle commands.",
+      "key_flags": [
+        "--project",
+        "--restart"
+      ],
+      "help": "unictl input --help",
+      "subcommands": [
+        {
+          "name": "set",
+          "description": "Switch the Unity Input System handler (legacy | new | both).",
+          "key_flags": [
+            "--project",
+            "--restart"
+          ],
+          "help": "unictl input set --help",
+          "describe": "unictl input set --describe"
+        }
+      ]
+    },
+    {
+      "name": "deploy",
+      "description": "Deploy and signing-time settings.",
+      "key_flags": [
+        "--project"
+      ],
+      "help": "unictl deploy --help",
+      "subcommands": [
+        {
+          "name": "android",
+          "description": "Android-specific deploy commands.",
+          "key_flags": [
+            "--project"
+          ],
+          "help": "unictl deploy android --help",
+          "subcommands": [
+            {
+              "name": "keystore",
+              "description": "Android keystore commands.",
+              "key_flags": [
+                "--project"
+              ],
+              "help": "unictl deploy android keystore --help",
+              "subcommands": [
+                {
+                  "name": "set",
+                  "description": "Configure Android keystore path and alias.",
+                  "key_flags": [
+                    "--project",
+                    "--path",
+                    "--alias"
+                  ],
+                  "help": "unictl deploy android keystore set --help",
+                  "describe": "unictl deploy android keystore set --describe"
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "scripting",
+      "description": "Unity scripting backend settings.",
+      "key_flags": [
+        "--project",
+        "--platform"
+      ],
+      "help": "unictl scripting --help",
+      "subcommands": [
+        {
+          "name": "set",
+          "description": "Toggle scripting backend (mono | il2cpp) per platform.",
+          "key_flags": [
+            "--project",
+            "--platform"
+          ],
+          "help": "unictl scripting set --help",
+          "describe": "unictl scripting set --describe"
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "description": "Unity project settings escape hatches.",
+      "key_flags": [
+        "--project"
+      ],
+      "help": "unictl settings --help",
+      "subcommands": [
+        {
+          "name": "raw-set",
+          "description": "Edit a Unity project setting by raw key; requires --no-warranty.",
+          "key_flags": [
+            "--project",
+            "--no-warranty"
+          ],
+          "help": "unictl settings raw-set --help",
+          "describe": "unictl settings raw-set --describe"
+        }
+      ]
+    },
+    {
+      "name": "wait",
+      "description": "Block until the editor reaches a target state.",
+      "key_flags": [
+        "--project",
+        "--timeout"
+      ],
+      "help": "unictl wait --help",
+      "describe": "unictl wait --describe"
     },
     {
       "name": "version",

@@ -13,6 +13,31 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ---
 
+## [0.7.4] - 2026-05-14
+
+---
+
+## [0.7.4] - 2026-05-14
+
+---
+
+## [0.7.4] - 2026-05-14
+
+### Fixed
+
+- Fixed agent-facing command discovery drift for nested v0.7 commands. Structured
+  `--help --json`, `describe-all`, and `capabilities` now expose
+  `editor compile --wait`, `editor refresh --wait`, and other nested commands
+  consistently.
+
+### Documentation
+
+- Added `docs/standalone/agent-discovery.md` and linked it from `AGENTS.md` so
+  future command/flag changes update `describe`, `capabilities`, and JSON help
+  surfaces together.
+
+---
+
 ## [0.7.3] - 2026-05-07
 
 ---
