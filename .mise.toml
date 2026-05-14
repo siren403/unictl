@@ -7,6 +7,8 @@ UNICTL_ROOT = "{{config_root}}"
 
 [tasks.unictl]
 description = "Run the local unictl CLI from TypeScript source"
+raw_args = true
+quiet = true
 run = "pwsh -NoProfile -ExecutionPolicy Bypass -File .mise/task-scripts/unictl.ps1"
 
 [tasks.check]

@@ -13,15 +13,25 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ---
 
-## [0.7.4] - 2026-05-14
+## [0.7.5] - 2026-05-14
+
+---
+
+## [0.7.5] - 2026-05-14
+
+### Fixed
+
+- Fixed the release script staging list so source, validation, and agent
+  documentation changes are committed into the release tag instead of only
+  being present in the npm publish working tree.
 
 ---
 
 ## [0.7.4] - 2026-05-14
 
----
-
-## [0.7.4] - 2026-05-14
+> Note: `unictl@0.7.4` was published to npm, but the git tag did not include
+> all source/documentation changes from the working tree. Use `v0.7.5` or newer
+> as the canonical release for this fix.
 
 ### Fixed
 

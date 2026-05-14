@@ -66,6 +66,24 @@ For narrower changes:
 - Unity UPM package files or `.meta` changes: `mise run check:meta-guids`
 - Release path: `mise run release:dry-run -- <version>`
 
+## Agent Discovery Contract
+
+- Structured command discovery is a release contract. Keep
+  `docs/standalone/agent-discovery.md` in sync with command and flag changes.
+- When adding, removing, renaming, or changing flags on CLI commands, update
+  `cli.ts`, `describe.ts`, `capabilities.json`, and `help-json.ts` together as
+  applicable.
+- Verify nested commands through structured surfaces, not only human `--help`.
+  Required spot checks:
+  - `mise run unictl -- --help --json`
+  - `mise run unictl -- describe-all`
+  - `mise run unictl -- capabilities`
+  - `mise run unictl -- editor compile --help --json`
+  - `mise run unictl -- deploy android keystore set --help --json`
+- Treat a command that works interactively but is missing from `--describe`,
+  `describe-all`, `capabilities`, or `--help --json` as a release-blocking
+  agent-discovery regression.
+
 ## Unity Asset `.meta` Rules
 
 - Do not directly create or edit Unity asset `.meta` files by hand or from an agent.
@@ -82,6 +100,9 @@ For narrower changes:
 
 ## Common Pitfalls
 
+- Do not trust human `--help` alone when checking whether agents can find a
+  command. Check `--describe`, `describe-all`, `capabilities`, and
+  `--help --json`; see `docs/standalone/agent-discovery.md`.
 - Avoid `bunx github:repo` for release validation; Bun caches git refs aggressively. Prefer npm versions such as `bunx unictl@0.6.3`.
 - Do not add a `dist/` build output. Bun runs TypeScript directly.
 - Root `package.json` is private repo tooling; `packages/cli/package.json` is the npm-published package.

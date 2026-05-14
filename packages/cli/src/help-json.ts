@@ -9,8 +9,9 @@ import { getCliPackageMeta } from "./meta";
 
 type SubcommandEntry = {
   name: string;
-  description: string;
-  key_flags: string[];
+  description?: string;
+  key_flags?: string[];
+  subcommands?: SubcommandEntry[];
 };
 
 type ExitCodeEntry = {
@@ -48,7 +49,16 @@ export function formatHelpJson(
   }
 
   // Subcommand view
-  const sc = (caps.subcommands as SubcommandEntry[]).find((s) => s.name === cmdName);
+  const parts = cmdName.split(".");
+  let sc = (caps.subcommands as SubcommandEntry[]).find((s) => s.name === cmdName);
+  if (!sc && parts.length > 1) {
+    let current = (caps.subcommands as SubcommandEntry[]).find((s) => s.name === parts[0]);
+    for (const part of parts.slice(1)) {
+      current = current?.subcommands?.find((s) => s.name === part);
+      if (!current) break;
+    }
+    sc = current;
+  }
 
   const flags: FlagEntry[] = argsDef
     ? Object.entries(argsDef).map(([name, def]) => ({

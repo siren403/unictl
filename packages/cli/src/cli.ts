@@ -996,6 +996,22 @@ const hasHelp = rawArgv.includes("--help") || rawArgv.includes("-h");
 const hasJson = rawArgv.includes("--json");
 
 if (hasHelp && hasJson) {
+  const commandPath: string[] = [];
+  for (const arg of rawArgv) {
+    if (arg === "--help" || arg === "-h" || arg === "--json") continue;
+    if (arg.startsWith("-")) break;
+    commandPath.push(arg);
+  }
+
+  for (let len = commandPath.length; len > 0; len--) {
+    const describeName = commandPath.slice(0, len).join(".");
+    const describeMeta = lookupDescribe(describeName);
+    if (describeMeta) {
+      console.log(JSON.stringify(describeMeta, null, 2));
+      process.exit(0);
+    }
+  }
+
   // Determine subcommand: first non-flag positional arg (if any)
   const knownSubcommands = new Set(Object.keys(main.subCommands ?? {}));
   let cmdName: string | undefined;
@@ -1027,6 +1043,23 @@ if (hasHelp && hasJson) {
       : cmdName === "test"
       ? testCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
       : undefined;
+
+  const editorSubCmd = commandPath[0] === "editor" ? commandPath[1] : undefined;
+  const editorSubCmdArgsDef: Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }> | undefined =
+    editorSubCmd === "status"
+      ? editorStatusCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : editorSubCmd === "quit"
+      ? editorQuitCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : editorSubCmd === "open"
+      ? editorOpenCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : editorSubCmd === "restart"
+      ? editorRestartCmd.args as Record<string, { type?: string; description?: string; default?: unknown; required?: boolean }>
+      : undefined;
+
+  if (editorSubCmdArgsDef) {
+    console.log(JSON.stringify(formatHelpJson(`editor.${editorSubCmd}`, editorSubCmdArgsDef), null, 2));
+    process.exit(0);
+  }
 
   console.log(JSON.stringify(formatHelpJson(cmdName, subCmdArgsDef), null, 2));
   process.exit(0);

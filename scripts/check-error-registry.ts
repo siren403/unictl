@@ -193,9 +193,15 @@ interface CapabilitiesBuiltin {
   emits_error_kinds: string[];
 }
 
+interface CapabilitiesSubcommand {
+  name: string;
+  subcommands?: CapabilitiesSubcommand[];
+}
+
 interface CapabilitiesJson {
   schema_version: number;
   unictl_version: string;
+  subcommands: CapabilitiesSubcommand[];
   builtins: CapabilitiesBuiltin[];
 }
 
@@ -214,6 +220,39 @@ for (const builtin of capabilities.builtins) {
 
 for (const msg of capsMissingFromRegistry) {
   failures.push(`CAPABILITIES DRIFT: ${msg}`);
+}
+
+function hasCapabilityCommand(path: string): boolean {
+  const parts = path.split(".");
+  let current = capabilities.subcommands.find((s) => s.name === parts[0]);
+  for (const part of parts.slice(1)) {
+    current = current?.subcommands?.find((s) => s.name === part);
+    if (!current) return false;
+  }
+  return current !== undefined;
+}
+
+const requiredCapabilityCommands = [
+  "describe-all",
+  "editor.status",
+  "editor.quit",
+  "editor.open",
+  "editor.restart",
+  "editor.compile",
+  "editor.play",
+  "editor.stop",
+  "editor.refresh",
+  "input.set",
+  "deploy.android.keystore.set",
+  "scripting.set",
+  "settings.raw-set",
+  "wait",
+];
+
+for (const commandPath of requiredCapabilityCommands) {
+  if (!hasCapabilityCommand(commandPath)) {
+    failures.push(`CAPABILITIES COMMAND DRIFT: missing command path "${commandPath}"`);
+  }
 }
 
 // Assert: capabilities.json unictl_version matches root package.json version
