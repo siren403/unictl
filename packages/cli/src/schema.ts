@@ -308,11 +308,11 @@ export const commandSchemas: Record<string, CommandSchema> = {
         type: "bool",
         default: false,
         required: false,
-        description: "Auto-orchestrate editor close → modify → optional relaunch",
+        description: "Close the editor before modifying ProjectSettings.asset. Does not relaunch.",
       },
     ],
     examples: [
-      { cmd: "unictl input set new --restart", intent: "switch to New Input System with full restart cycle" },
+      { cmd: "unictl input set new --restart", intent: "close the editor, then switch to New Input System" },
       { cmd: "unictl input set legacy", intent: "revert to legacy Input (editor must be closed first)" },
     ],
     exit_codes: [0, 2, 3, 125],

@@ -13,6 +13,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Fixed `input set --restart` so it uses the real `editor quit` lifecycle
+  before editing `ProjectSettings.asset`. The previous path called a
+  non-existent `editor_quit` IPC command and always fell back to
+  `editor_running`.
 - Added `unictl schema` as the canonical machine-readable command contract
   surface for agents, routed root `--help` to it, and deprecated
   `--describe` / `describe-all` as compatibility aliases.

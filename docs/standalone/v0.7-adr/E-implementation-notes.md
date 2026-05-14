@@ -54,8 +54,8 @@ Cross-cutting glue:
 - `requireEditorClosed({project, restart, intent})` — resolves project
   root via `findProjectRoot()` then reads `runtime.json`. If editor is
   alive, either fail with `editor_running` (exit 3) or, when `--restart`
-  was passed, attempt `editor_quit` IPC, wait 1.5s for the terminal_reason
-  flush, and re-check. Used by every Phase E command before any file write.
+  was passed, use the same quit lifecycle as `editor quit`, and re-check.
+  Used by every Phase E command before any file write.
 
 - `readSecretFromStdin(prompt)` — TTY-aware reader. On a TTY: raw mode +
   echo-suppressed line read. On a pipe: reads ALL stdin lines on first

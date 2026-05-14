@@ -280,7 +280,7 @@ const inputSetCmd = defineCommand({
     },
     restart: {
       type: "boolean",
-      description: "Auto-orchestrate editor close → modify → optional relaunch",
+      description: "Close the editor before modifying ProjectSettings.asset. Does not relaunch.",
     },
   },
   run: async ({ args }) => {

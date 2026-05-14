@@ -6,12 +6,12 @@
 //
 // All four refuse to run while the editor is up (Unity caches PlayerSettings
 // in memory and writes them back on save, silently overwriting our edit).
-// `--restart` on input set issues a quit IPC first, then proceeds.
+// `--restart` on input set uses the editor quit lifecycle first, then proceeds.
 
 import { findProjectRoot } from "./socket";
 import { getRuntimeStatus } from "./runtime";
 import { errorEnvelope } from "./error";
-import { command as ipcCommand } from "./client";
+import { editorQuit } from "./editor";
 
 export type Preflight =
   | { ok: true; projectRoot: string }
@@ -20,7 +20,7 @@ export type Preflight =
 /**
  * Resolve project root + ensure editor is closed before mutating
  * ProjectSettings.asset. If `--restart` was passed, attempt a graceful
- * editor_quit IPC first; if the editor stays alive, surface the error.
+ * editor quit lifecycle first; if the editor stays alive, surface the error.
  *
  * Use this from every Phase E command BEFORE any file write.
  */
@@ -47,13 +47,10 @@ export async function requireEditorClosed(opts: {
   if (editorAlive) {
     if (opts.restart) {
       try {
-        await ipcCommand("editor_quit", {}, { project: projectRoot });
-        // Brief grace period for Unity to finish its quit handlers and write
-        // its terminal_reason="quit" before we read runtime.json again.
-        await new Promise((r) => setTimeout(r, 1500));
+        await editorQuit({ project: projectRoot, gracefulTimeoutMs: 30_000 });
       } catch {
-        // editor_quit IPC failure is non-fatal here — fall through to the
-        // post-quit liveness check.
+        // Quit failure is non-fatal here — fall through to the post-quit
+        // liveness check so callers get the standard editor_running envelope.
       }
 
       const post = getRuntimeStatus(projectRoot);
