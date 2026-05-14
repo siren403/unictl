@@ -55,6 +55,17 @@ const VERSIONED_CLI = [
 
 const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS, ...VERSIONED_CLI];
 
+const RELEASE_MANAGED_FILES = [
+  ...ALL_VERSIONED,
+  join(ROOT, ".mise.toml"),
+  join(ROOT, "AGENTS.md"),
+  join(ROOT, "packages/cli/src/cli.ts"),
+  join(ROOT, "packages/cli/src/help-json.ts"),
+  join(ROOT, "scripts/check-error-registry.ts"),
+  join(ROOT, "scripts/release.ts"),
+  join(ROOT, "docs/standalone/agent-discovery.md"),
+];
+
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
 const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
 const ROADMAP_PATH   = join(ROOT, "docs/standalone/ROADMAP.md");
@@ -366,7 +377,7 @@ if (isDryRun) {
 
 // Step 3: local commit
 console.log("  Step 4: git commit (local)");
-const filesToAdd = [...ALL_VERSIONED, CHANGELOG_PATH];
+const filesToAdd = [...RELEASE_MANAGED_FILES, CHANGELOG_PATH];
 if (existsSync(ROADMAP_PATH)) filesToAdd.push(ROADMAP_PATH);
 run(["git", "add", ...filesToAdd]);
 run(["git", "commit", "-m", `release: v${next}`]);

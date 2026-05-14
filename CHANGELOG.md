@@ -13,7 +13,16 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ---
 
-## [0.7.5] - 2026-05-14
+## [0.7.6] - 2026-05-14
+
+---
+
+## [0.7.6] - 2026-05-14
+
+### Fixed
+
+- Fixed the release script staging list to include `scripts/release.ts` itself,
+  preventing release-process fixes from being left only in the local worktree.
 
 ---
 
