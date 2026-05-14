@@ -553,13 +553,9 @@ const editorOpenCmd = defineCommand({
 
     // Already-running + --wait reachable short-circuit: a single /health probe
     // is authoritative for "IPC handler is registered, callers can send
-    // commands". Bypass the wait engine here — the engine's reachable
-    // predicate also checks phase_override, which flips to 'unresponsive' when
-    // the editor is unfocused (Unity throttles EditorApplication.update so
-    // heartbeat stalls). That's a false negative for ready-sync since the IPC
-    // channel is fully functional. Cold-starts (alreadyRunning=false) and
-    // non-reachable wait targets (idle/playing/etc) still go through the
-    // engine because their semantics genuinely depend on phase observation.
+    // commands". Bypass the wait engine here so idempotent ready-sync returns
+    // immediately. Cold-starts (alreadyRunning=false) and non-reachable wait
+    // targets (idle/playing/etc) still go through the engine.
     if (alreadyRunning && waitTarget === "reachable") {
       const probeStart = Date.now();
       try {

@@ -36,10 +36,11 @@ reader, the F.3 timeout matrix, and the F.7 Pull cadence.
 |--------------|----------------|
 | `idle`, `compiling`, `reloading` | `last_state.phase` exact match |
 | `playing` | phase is `playing` OR `paused` (still in Play mode) |
-| `reachable` | `handler_registered === true` AND `phase_override !== "never_seen" / "unresponsive"` |
+| `reachable` | `handler_registered === true` |
 
 `phase_override` from `format_liveness_response` is honored:
-- `"never_seen"` → no heartbeat ever arrived; `reachable` does NOT match.
+- `"never_seen"` → no heartbeat ever arrived; `reachable` can still match if
+  the IPC handler is registered because `/health` and `/command` are usable.
 - `"unresponsive"` → past A4 30s ceiling; loop returns `editor_unresponsive`
   outcome (exit 3) unless target is `reachable` (which keeps polling).
 

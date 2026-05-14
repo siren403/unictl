@@ -178,15 +178,16 @@ function effectivePhase(resp: LivenessResponse): { phase: string; unresponsive: 
  *
  * Rules (matches Phase A1 ADR + describe metadata):
  *   - reachable: any successful response with handler_registered=true (the
- *     editor is up and the IPC handler is wired). `never_seen` does NOT
- *     satisfy reachable because no heartbeat has arrived yet.
+ *     editor is up and the IPC handler is wired). Heartbeat state is not part
+ *     of the reachable contract because /health and /command can be usable
+ *     before the first heartbeat or while the editor is unfocused.
  *   - idle / playing / compiling / reloading: phase exactly matches.
  *   - playing also accepts "paused" (still in Play mode, just paused).
  */
 function matchState(target: WaitState, resp: LivenessResponse): MatchResult {
   const { phase, unresponsive } = effectivePhase(resp);
   if (target === "reachable") {
-    const matched = !unresponsive && resp.phase_override !== "never_seen" && resp.handler_registered === true;
+    const matched = resp.handler_registered === true;
     return { matched, phase, unresponsive };
   }
   if (target === "playing") {
