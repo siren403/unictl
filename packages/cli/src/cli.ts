@@ -62,7 +62,7 @@ function parsePFlags(args: string[]): Record<string, string> | null {
   let found = false;
 
   for (let i = 0; i < args.length; i++) {
-    if (args[i] === "-p" && i + 1 < args.length) {
+    if ((args[i] === "-p" || args[i] === "--p") && i + 1 < args.length) {
       const kv = args[i + 1];
       const eq = kv.indexOf("=");
       if (eq > 0) {
@@ -74,6 +74,54 @@ function parsePFlags(args: string[]): Record<string, string> | null {
   }
 
   return found ? result : null;
+}
+
+function emitEditorLogText(response: unknown): boolean {
+  if (!response || typeof response !== "object") return false;
+  const obj = response as Record<string, unknown>;
+  if (obj.success === false) {
+    const message = typeof obj.message === "string" ? obj.message : "editor_log failed";
+    console.error(message);
+    return true;
+  }
+
+  const data = obj.data;
+  if (!data || typeof data !== "object") return false;
+  const payload = data as Record<string, unknown>;
+
+  const lines = payload.lines;
+  if (Array.isArray(lines)) {
+    for (const line of lines) console.log(String(line));
+    return true;
+  }
+
+  const matches = payload.matches;
+  if (Array.isArray(matches)) {
+    for (const match of matches) {
+      if (match && typeof match === "object" && "text" in match) {
+        console.log(String((match as { text: unknown }).text));
+      }
+    }
+    return true;
+  }
+
+  const compileErrors = Array.isArray(payload.compile_errors) ? payload.compile_errors : [];
+  const exceptions = Array.isArray(payload.exceptions) ? payload.exceptions : [];
+  if ("compile_errors" in payload || "exceptions" in payload) {
+    const emitEntries = (entries: unknown[]) => {
+      for (const entry of entries) {
+        if (entry && typeof entry === "object" && "text" in entry) {
+          console.log(String((entry as { text: unknown }).text));
+        }
+      }
+    };
+    emitEntries(compileErrors);
+    if (compileErrors.length > 0 && exceptions.length > 0) console.log("");
+    emitEntries(exceptions);
+    return true;
+  }
+
+  return false;
 }
 
 /**
@@ -789,6 +837,11 @@ const commandCmd = defineCommand({
       type: "string",
       description: "Parameter as key=value (repeatable, e.g. -p action=play -p speed=2)",
     },
+    format: {
+      type: "string",
+      default: "json",
+      description: "Output format for editor_log: json or text. Text emits raw lines/matches/errors for shell pipes.",
+    },
     project: {
       type: "string",
       description: "Unity project path (auto-detected if omitted)",
@@ -812,6 +865,15 @@ const commandCmd = defineCommand({
     try {
       const toolName = args.tool ? String(args.tool) : "list";
       const params = await resolveParams(rawArgs);
+      const format = typeof args.format === "string" ? args.format : "json";
+      if (format !== "json" && format !== "text") {
+        output({ ok: false, error: { kind: "invalid_param", message: `Unknown --format '${format}'. Valid: json, text.` } });
+        process.exit(2);
+      }
+      if (format === "text" && toolName !== "editor_log") {
+        output({ ok: false, error: { kind: "invalid_param", message: "--format text is currently supported only for editor_log." } });
+        process.exit(2);
+      }
       const suggestion = suggestV07Mapping(toolName, params ?? {});
       if (suggestion) {
         process.stderr.write(
@@ -819,7 +881,11 @@ const commandCmd = defineCommand({
         );
       }
       const response = await command(toolName, params, { project: args.project });
-      output(response);
+      if (format === "text" && toolName === "editor_log") {
+        if (!emitEditorLogText(response)) output(response);
+      } else {
+        output(response);
+      }
       if (
         response &&
         typeof response === "object" &&

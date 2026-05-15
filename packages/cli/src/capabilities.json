@@ -28,9 +28,14 @@
       "description": "Invoke a builtin tool exposed by the Unity Editor via IPC.",
       "key_flags": [
         "-p",
+        "--format",
         "@file"
       ],
-      "help": "unictl command list (requires live editor)"
+      "help": "unictl command list (requires live editor)",
+      "notes": [
+        "Default output is JSON.",
+        "For editor_log only, --format text emits data.lines, data.matches[].text, or errors groups as raw text for shell pipelines."
+      ]
     },
     {
       "name": "schema",

@@ -422,10 +422,12 @@ export const commandSchemas: Record<string, CommandSchema> = {
       ...COMMON_ARGS,
       { name: "tool", type: "string", required: false, description: "UnictlTool name (e.g. editor_log, capture_ui, my_custom_tool). Omit to enumerate all tools." },
       { name: "p", type: "string", required: false, description: "Parameter as key=value, repeatable (e.g. -p action=tail -p lines=50)." },
+      { name: "format", type: "enum", enumValues: ["json", "text"], default: "json", required: false, description: "Output format. text is currently specialized for editor_log and emits raw lines/matches/errors for shell pipes." },
     ],
     examples: [
       { cmd: "unictl command list", intent: "enumerate all [UnictlTool] registrations at runtime (builtin + consumer-defined)" },
       { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the project-scoped editor log when available" },
+      { cmd: "unictl command editor_log -p action=tail --format text", intent: "print raw log lines for shell pipelines such as grep, tail, or wc" },
       { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
       { cmd: "unictl command my_save_inspector -p target=Player", intent: "invoke a consumer-defined [UnictlTool]" },
       { cmd: "unictl schema command", intent: "emit this command contract as JSON" },

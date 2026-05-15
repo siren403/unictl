@@ -31,6 +31,9 @@ not be the richer path for common agent workflows:
 - Prefer `unictl command editor_log -p action=tail|search|errors` over
   deprecated `game_logs`; project-scoped `editor_log` is the reliable log
   source for agent diagnostics.
+- Use `unictl command editor_log -p action=tail --format text` only when a
+  shell pipeline needs raw log lines. Keep the default JSON output for
+  structured automation.
 - If a raw async job is exposed, provide a first-class wait/status companion
   before documenting progress-file parsing as an agent workflow.
 
