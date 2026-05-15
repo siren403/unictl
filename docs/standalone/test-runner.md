@@ -2,6 +2,10 @@
 
 Run Unity tests via the editor lane (IPC, v0.6.0+) or headless batchmode (`--batch`).
 
+Batchmode uses the bundled `Unictl.BatchTestRunner.RunFromCommandLine`
+`-executeMethod` entrypoint backed by `UnityEditor.TestTools.TestRunner.Api`.
+It does not rely on Unity's direct `-runTests -testPlatform ...` CLI path.
+
 > **v0.6.0+**: `--batch` is no longer required when the editor is running. See [Editor Lane (v0.6.0+)](#editor-lane-v060) below.
 
 ---
@@ -22,11 +26,11 @@ unictl test --batch \
 
 | Flag | Required | Description |
 |------|----------|-------------|
-| `--batch` | No (batchmode) | Force headless batchmode. Without this flag, unictl auto-routes to editor lane if the editor is running; returns `editor_not_running` (exit 3) if not. |
+| `--batch` | No (batchmode) | Force headless batchmode. Without this flag, unictl uses editor lane if the editor is reachable; otherwise it auto-routes to batchmode. |
 | `--platform` | **Yes** | Test platform: `editmode` or `playmode`. |
-| `--results` | **Yes** | Output path for the NUnit XML results file. Parent directory is created automatically. |
+| `--results` | **Yes** | Output path for the NUnit XML results file. Parent directory is created automatically. Do not place this under the Unity project `Temp/` directory. |
 | `--filter` | No | Unity `-testFilter` expression. See filter syntax below. |
-| `--timeout` | No | Wall-clock timeout in seconds. `0` or omitted = unlimited. Unity is killed and `test_timeout` is returned when exceeded. |
+| `--timeout` | No | Wall-clock timeout. Accepts `30s`, `2m`, `1h`, bare seconds, or `0` for unlimited. Unity is killed and `test_timeout` is returned when exceeded. |
 | `--editor-version` | No | Override the Unity editor version to use. Default: read from `ProjectSettings/ProjectVersion.txt`. |
 | `--project` | No | Unity project root path. Auto-detected from current directory if omitted. |
 | `--allow-unsaved-scenes` | No | (Editor lane only) Bypass dirty-scene preflight for PlayMode. |
@@ -85,6 +89,7 @@ The remapping table:
 ```json
 {
   "ok": true,
+  "lane": "batch",
   "platform": "editmode",
   "total": 5,
   "passed": 5,
@@ -166,6 +171,11 @@ Unity batch output is written to `Library/unictl-tests/test-<timestamp>.log` ins
 
 ### Batchmode (`--batch`)
 
+- EditMode batch tests run through `-executeMethod
+  Unictl.BatchTestRunner.RunFromCommandLine`, which calls `TestRunnerApi` and
+  writes XML from `RunFinished`.
+- Do not write `--results` under the project `Temp/` directory; Unity may clear
+  it during lifecycle cleanup after the TestRunner saves XML.
 - Play Mode tests require a valid player build configuration; failures during player build emit `unity_crash` or `unknown_test_failure`.
 - Do not have the editor open on the same project when running batchmode tests.
 - NUnit XML parsing uses attribute extraction from the `<test-run>` element; nested test detail is not surfaced in the JSON output (read the XML directly for per-test breakdown).
@@ -184,13 +194,13 @@ When the Unity editor is running on the target project, `unictl test` automatica
 unictl test --platform <editmode|playmode> --results <path>
 ```
 
-If the editor is not running, unictl returns `editor_not_running` (exit 3) and suggests using `--batch`.
+If the editor is not running, unictl auto-routes to the batch lane.
 
 ### How It Works
 
 1. CLI sends `test_run` IPC call to the live editor → editor responds immediately with `{ok: true, job_id, state: "queued"}`.
 2. CLI polls `Library/unictl-tests/<job-id>.json` for progress (250 ms initial, up to 2 s backoff).
-3. Heartbeat staleness is detected at 5 s; if the editor PID dies or the session ID changes, the CLI exits with the appropriate error kind.
+3. Heartbeat staleness is detected at 30 s; if the editor PID dies or the session ID changes, the CLI exits with the appropriate error kind.
 
 ### New Flags
 

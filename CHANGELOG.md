@@ -13,6 +13,16 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Documented the stable `unictl test` control contract: batch EditMode uses the
+  bundled `-executeMethod`/`TestRunnerApi` runner, editor lane uses the
+  progress-file job contract, and lane auto-routing is explicit.
+- Aligned `unictl test --timeout` with `unictl wait` duration parsing and made
+  successful test output include the selected lane. Editor-lane heartbeat stale
+  detection now uses a 30s ceiling with structured context instead of a 5s
+  hard-coded cutoff.
+- `unictl test` now rejects `--results` paths under the Unity project `Temp/`
+  directory before launch because Unity may delete that directory during batch
+  lifecycle cleanup after XML is saved.
 - Added regression coverage for the Unity `.meta` GUID release guard, including
   duplicate GUIDs, known placeholder GUIDs, and sequential-looking sample GUIDs.
 - Added `execute_menu` menu discovery diagnostics: `action=search` and

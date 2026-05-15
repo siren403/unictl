@@ -1,10 +1,11 @@
 import { defineCommand } from "citty";
 import { existsSync, mkdirSync, readFileSync } from "fs";
-import { join, resolve } from "path";
+import { isAbsolute, join, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
 import { readUnityVersion, resolveUnityBinary, killProcess } from "./process";
 import { command, health } from "./client";
 import { errorExit } from "./error";
+import { parseDuration } from "./wait";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -14,6 +15,7 @@ export type TestPlatform = "editmode" | "playmode";
 
 export type TestResult = {
   ok: boolean;
+  lane: "batch" | "editor";
   platform: TestPlatform;
   total: number;
   passed: number;
@@ -22,6 +24,8 @@ export type TestResult = {
   results_file: string;
   log_file: string;
   duration_ms: number;
+  job_id?: string;
+  progress_file?: string;
 };
 
 // ---------------------------------------------------------------------------
@@ -69,6 +73,25 @@ function hasInvalidFilterPattern(logContent: string): boolean {
   return /Invalid test filter/i.test(logContent);
 }
 
+function isWithin(parent: string, child: string): boolean {
+  const rel = relative(resolve(parent), resolve(child));
+  return rel === "" || (!!rel && !rel.startsWith("..") && !isAbsolute(rel));
+}
+
+function assertStableResultsPath(projectRoot: string, resultsFile: string): void {
+  const resolvedResults = resolve(resultsFile);
+  const projectTemp = join(projectRoot, "Temp");
+  if (isWithin(projectTemp, resolvedResults)) {
+    errorExit(
+      2,
+      "invalid_param",
+      "--results must not be inside the Unity project Temp directory; Unity may delete it during batch/editor lifecycle.",
+      "unictl test --platform editmode --results TestResults/results.xml",
+      { results_file: resolvedResults, unstable_directory: projectTemp },
+    );
+  }
+}
+
 // ---------------------------------------------------------------------------
 // runTest — core implementation
 // ---------------------------------------------------------------------------
@@ -82,6 +105,7 @@ export async function runTest(opts: {
   unityVersion?: string;
 }): Promise<TestResult> {
   const { projectRoot, platform, resultsFile, filter, timeoutSec } = opts;
+  assertStableResultsPath(projectRoot, resultsFile);
 
   const resolvedResults = resolve(resultsFile);
 
@@ -239,6 +263,7 @@ export async function runTest(opts: {
   // Success
   return {
     ok: true,
+    lane: "batch",
     platform,
     total,
     passed,
@@ -305,6 +330,7 @@ type EditorLaneArgs = {
 
 async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
   const { projectRoot, platform, resultsFile, filter, timeoutSec, allowUnsavedScenes, allowReloadActive } = args;
+  assertStableResultsPath(projectRoot, resultsFile);
 
   const jobId = crypto.randomUUID();
   const resolvedResults = resolve(resultsFile);
@@ -347,7 +373,7 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
 
   let interval = 250;
   const maxInterval = 2000;
-  const HEARTBEAT_STALE_MS = 5000;
+  const HEARTBEAT_STALE_MS = 30_000;
 
   while (true) {
     await sleep(interval);
@@ -376,7 +402,19 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
     if (job.state === "running" && job.last_update_ms > 0) {
       const sinceUpdate = Date.now() - job.last_update_ms;
       if (sinceUpdate > HEARTBEAT_STALE_MS) {
-        errorExit(8, "test_heartbeat_stale", `No progress update for ${Math.floor(sinceUpdate / 1000)}s (last_update_ms=${job.last_update_ms}).`);
+        errorExit(
+          8,
+          "test_heartbeat_stale",
+          `No progress update for ${Math.floor(sinceUpdate / 1000)}s (last_update_ms=${job.last_update_ms}).`,
+          undefined,
+          {
+            job_id: job.job_id ?? jobId,
+            progress_file: progressPath,
+            last_update_ms: job.last_update_ms,
+            stale_ms: sinceUpdate,
+            stale_after_ms: HEARTBEAT_STALE_MS,
+          },
+        );
       }
     }
 
@@ -406,12 +444,15 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
 
         return {
           ok: true,
+          lane: "editor",
           platform,
           total,
           passed,
           failed,
           skipped,
           results_file: job.results_path ?? resolvedResults,
+          job_id: job.job_id,
+          progress_file: progressPath,
           log_file: null as unknown as string,
           duration_ms: durationMs,
         };
@@ -490,7 +531,7 @@ EXIT CODES:
     },
     timeout: {
       type: "string",
-      description: "Wall-clock timeout in seconds (0 = unlimited)",
+      description: "Wall-clock timeout (30s, 2m, 1h, bare seconds, or 0 unlimited)",
     },
     editorVersion: {
       type: "string",
@@ -524,8 +565,21 @@ EXIT CODES:
       errorExit(2, "invalid_param", "--results is required: provide an output XML file path", "unictl test --platform <editmode|playmode> --results <output.xml>");
     }
 
+    let timeoutSec: number | undefined;
+    if (args.timeout !== undefined) {
+      const parsed = parseDuration(String(args.timeout));
+      if (Number.isNaN(parsed)) {
+        errorExit(
+          2,
+          "invalid_param",
+          `Cannot parse --timeout '${args.timeout}'. Expected forms: 30s, 2m, 1h, bare integer, or 0.`,
+          "unictl test --platform <editmode|playmode> --timeout 5m --results <output.xml>",
+        );
+      }
+      timeoutSec = parsed;
+    }
+
     const { projectRoot } = getProjectPaths(args.project);
-    const timeoutSec = args.timeout ? (parseInt(args.timeout, 10) || 0) : undefined;
 
     // Lane routing
     if (args.batch) {

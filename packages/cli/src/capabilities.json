@@ -287,7 +287,7 @@
     },
     {
       "name": "test",
-      "description": "Run Unity tests. Auto-routes to editor lane (IPC) when editor is running; falls back to batchmode with --batch. Without --batch and editor not running, returns editor_not_running error.",
+      "description": "Run Unity tests. Uses editor lane (IPC) when the editor is reachable; otherwise auto-routes to batchmode. Batch EditMode uses the bundled -executeMethod/TestRunnerApi runner.",
       "key_flags": [
         "--batch",
         "--platform",
@@ -386,9 +386,11 @@
       ],
       "notes": [
         "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
+        "Successful output includes lane=batch|editor. Editor lane also includes job_id and progress_file.",
+        "--timeout accepts 30s, 2m, 1h, bare seconds, or 0 unbounded.",
         "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via test_run tool. Poll Library/unictl-tests/<job-id>.json for progress.",
         "For PlayMode editor lane, inspect domain reload state with command editor_control -p action=status; data.domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
-        "Batchmode lane: --batch required or editor not running → headless Unity process."
+        "Batchmode lane: --batch required or editor not running → headless Unity process using Unictl.BatchTestRunner.RunFromCommandLine."
       ]
     }
   ],
