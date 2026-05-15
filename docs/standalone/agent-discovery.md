@@ -20,6 +20,17 @@ Human `--help` output is a router, not the contract. Agents must not parse help
 text for flags, risks, or exit codes. If a command exists for users, it must be
 visible through `unictl schema`.
 
+First-class commands must be preferred over raw builtin tool dispatch whenever
+both exist. Raw `unictl command <tool>` is an escape hatch for runtime
+`[UnictlTool]` registrations and builtins without a verb-noun command. It must
+not be the richer path for common agent workflows:
+
+- Prefer `unictl editor status` over `unictl command editor_control -p action=status`.
+- Prefer `unictl wait <state>` over ad-hoc `editor_control` polling.
+- Prefer `unictl test` over raw `unictl command test_run`.
+- If a raw async job is exposed, provide a first-class wait/status companion
+  before documenting progress-file parsing as an agent workflow.
+
 Legacy aliases remain for one compatibility window:
 
 - `unictl describe-all` prints a deprecation warning and delegates to

@@ -21,6 +21,7 @@
 
 import { liveness } from "./client";
 import { errorEnvelope } from "./error";
+import { editorStatus, type EditorStatusResult } from "./editor";
 import { getRuntimeStatus } from "./runtime";
 import { findProjectRoot } from "./socket";
 
@@ -196,6 +197,55 @@ function matchState(target: WaitState, resp: LivenessResponse): MatchResult {
   return { matched: phase === target, phase, unresponsive };
 }
 
+function matchEditorStatus(target: WaitState, status: EditorStatusResult): MatchResult {
+  const phase = status.phase ?? "unknown";
+  const unresponsive = status.stale && !status.state_reachable;
+
+  if (target === "reachable") {
+    return { matched: status.reachable === true, phase, unresponsive: false };
+  }
+
+  if (target === "playing") {
+    return {
+      matched: status.is_in_playmode === true || phase === "playing" || phase === "paused",
+      phase,
+      unresponsive,
+    };
+  }
+
+  if (target === "compiling") {
+    return {
+      matched: status.is_compiling === true || phase === "compiling",
+      phase,
+      unresponsive,
+    };
+  }
+
+  if (target === "reloading") {
+    return {
+      matched: status.is_reloading_domain === true || phase === "reloading",
+      phase,
+      unresponsive,
+    };
+  }
+
+  const idleByStateSnapshot =
+    status.reachable === true &&
+    status.state_reachable === true &&
+    status.is_compiling !== true &&
+    status.is_reloading_domain !== true &&
+    status.is_importing_assets !== true &&
+    status.is_in_playmode !== true;
+
+  const idleByLiveness = phase === "idle" && !unresponsive;
+
+  return {
+    matched: idleByStateSnapshot || idleByLiveness,
+    phase,
+    unresponsive,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Pull loop with reload-aware re-arm (D1 + D6)
 // ---------------------------------------------------------------------------
@@ -272,17 +322,64 @@ export async function runWait(opts: WaitOptions): Promise<WaitOutcome> {
         }
       }
 
-      // Step 2 — /liveness probe.
+      // Step 2 — rich editor status probe. This combines /health,
+      // editor_control status, and /liveness so agents do not have to choose
+      // between first-class status and raw builtin polling. When the managed
+      // command handler is still reachable during compile/import, trust that
+      // state snapshot over a temporarily stale heartbeat.
+      let observedPhase: string | null = null;
+      let status: EditorStatusResult | null = null;
+      try {
+        status = await editorStatus({ project: opts.project });
+      } catch {
+        status = null;
+      }
+
+      if (status) {
+        const { matched, phase, unresponsive } = matchEditorStatus(target, status);
+        observedPhase = phase;
+
+        if (phase === "reloading" && target !== "reloading") {
+          if (pauseStart === null) pauseStart = Date.now();
+        } else if (pauseStart !== null) {
+          pausedMs += Date.now() - pauseStart;
+          pauseStart = null;
+        }
+
+        if (matched) {
+          return {
+            kind: "reached",
+            state: target,
+            phase,
+            alive_ms_ago: status.alive_ms_ago ?? 0,
+            elapsed_ms: Date.now() - startedAt,
+          };
+        }
+
+        if (unresponsive && target !== "reachable") {
+          return {
+            kind: "editor_unresponsive",
+            state: target,
+            elapsed_ms: Date.now() - startedAt,
+            alive_ms_ago: status.alive_ms_ago ?? 0,
+          };
+        }
+      }
+
+      // Step 3 — /liveness fallback.
       let resp: LivenessResponse | null = null;
       let livenessThrew = false;
-      try {
-        resp = (await liveness({ project: opts.project })) as LivenessResponse;
-      } catch {
-        livenessThrew = true;
+      if (status === null || status.liveness_reachable === false) {
+        try {
+          resp = (await liveness({ project: opts.project })) as LivenessResponse;
+        } catch {
+          livenessThrew = true;
+        }
       }
 
       if (resp) {
         const { matched, phase, unresponsive } = matchState(target, resp);
+        observedPhase = phase;
 
         // Reload-aware re-arm: pause the clock while we're in a reload window
         // (unless the user explicitly waits for `reloading`, in which case we
@@ -314,7 +411,7 @@ export async function runWait(opts: WaitOptions): Promise<WaitOutcome> {
         }
       }
 
-      // Step 3 — budget check. Account for paused reload windows.
+      // Step 4 — budget check. Account for paused reload windows.
       if (budgetMs > 0) {
         const liveMs = pauseStart === null
           ? Date.now() - startedAt - pausedMs
@@ -323,7 +420,7 @@ export async function runWait(opts: WaitOptions): Promise<WaitOutcome> {
           return {
             kind: "wait_timeout",
             state: target,
-            observed_phase: resp ? effectivePhase(resp).phase : null,
+            observed_phase: observedPhase,
             elapsed_ms: Date.now() - startedAt,
             budget_ms: budgetMs,
           };

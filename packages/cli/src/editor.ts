@@ -37,6 +37,61 @@ export type EditorStatusResult = {
   transport: EndpointDescriptor["transport"];
   socket: boolean;
   health: unknown | null;
+  reachable: boolean;
+  phase: string | null;
+  state_reachable: boolean;
+  liveness_reachable: boolean;
+  is_playing: boolean | null;
+  is_in_playmode: boolean | null;
+  is_compiling: boolean | null;
+  is_paused: boolean | null;
+  is_reloading_domain: boolean | null;
+  is_importing_assets: boolean | null;
+  is_busy: boolean;
+  busy_reasons: string[];
+  alive_ms_ago: number | null;
+  last_heartbeat_ms: number | null;
+  stale: boolean;
+  domain_reload: unknown | null;
+  run_in_background: boolean | null;
+  unity_version: string | null;
+  platform: string | null;
+  diagnostics?: {
+    state_error?: string;
+    liveness_error?: string;
+  };
+};
+
+type EditorControlStatusData = {
+  is_playing?: boolean;
+  is_compiling?: boolean;
+  is_paused?: boolean;
+  domain_reload?: unknown;
+  run_in_background?: boolean;
+  unity_version?: string;
+  platform?: string;
+};
+
+type EditorControlStatusResponse = {
+  success?: boolean;
+  data?: EditorControlStatusData;
+  message?: string;
+  error?: { message?: string };
+};
+
+type LivenessResponse = {
+  alive_ms_ago?: number;
+  last_heartbeat_ms?: number;
+  last_state?: {
+    phase?: string;
+    is_playing?: boolean;
+    is_compiling?: boolean;
+    is_paused?: boolean;
+    unity_version?: string;
+    platform?: string;
+  };
+  handler_registered?: boolean;
+  phase_override?: "never_seen" | "unresponsive" | null;
 };
 
 function endpointIsReachable(endpoint: EndpointDescriptor): boolean {
@@ -49,6 +104,17 @@ async function tryHealth(endpoint: EndpointDescriptor): Promise<unknown | null> 
     const res = await fetchEndpoint(endpoint, "/health");
     if (!res.ok) return null;
     return await res.json();
+  } catch {
+    return null;
+  }
+}
+
+/** Try /liveness endpoint, returns parsed JSON or null. */
+async function tryLiveness(endpoint: EndpointDescriptor): Promise<LivenessResponse | null> {
+  try {
+    const res = await fetchEndpoint(endpoint, "/liveness");
+    if (!res.ok) return null;
+    return await res.json() as LivenessResponse;
   } catch {
     return null;
   }
@@ -73,6 +139,21 @@ async function sendEditorControl(
     }),
   });
   return res.json();
+}
+
+function boolOrNull(value: unknown): boolean | null {
+  return typeof value === "boolean" ? value : null;
+}
+
+function stringOrNull(value: unknown): string | null {
+  return typeof value === "string" ? value : null;
+}
+
+function effectiveLivenessPhase(liveness: LivenessResponse | null): string | null {
+  if (!liveness) return null;
+  if (liveness.phase_override === "unresponsive") return "unresponsive";
+  if (liveness.phase_override === "never_seen") return "never_seen";
+  return typeof liveness.last_state?.phase === "string" ? liveness.last_state.phase : null;
 }
 
 /** Clean Temp/__Backupscenes/ to avoid scene recovery popup. */
@@ -129,6 +210,48 @@ export async function editorStatus(opts?: { project?: string }): Promise<EditorS
   const pid = await getUnityPid(opts?.project);
   const endpointPresent = endpointIsReachable(endpoint);
   const healthData = endpointPresent ? await tryHealth(endpoint) : null;
+  const healthRecord = healthData && typeof healthData === "object" ? healthData as Record<string, unknown> : null;
+  const livenessData = endpointPresent ? await tryLiveness(endpoint) : null;
+  const diagnostics: NonNullable<EditorStatusResult["diagnostics"]> = {};
+
+  let stateData: EditorControlStatusData | null = null;
+  if (endpointPresent && healthRecord?.handler_registered === true) {
+    try {
+      const stateResp = await sendEditorControl(endpoint, { action: "status" }) as EditorControlStatusResponse;
+      if (stateResp?.success === true && stateResp.data && typeof stateResp.data === "object") {
+        stateData = stateResp.data;
+      } else {
+        diagnostics.state_error =
+          stateResp?.error?.message ?? stateResp?.message ?? "editor_control status did not return success=true";
+      }
+    } catch (e) {
+      diagnostics.state_error = e instanceof Error ? e.message : String(e);
+    }
+  }
+
+  const lastState = livenessData?.last_state;
+  const phase = effectiveLivenessPhase(livenessData)
+    ?? (stateData?.is_compiling === true ? "compiling" : null)
+    ?? (stateData?.is_playing === true ? "playing" : null)
+    ?? (stateData ? "idle" : null);
+
+  const isCompiling = boolOrNull(stateData?.is_compiling ?? lastState?.is_compiling);
+  const isPlaying = boolOrNull(stateData?.is_playing ?? lastState?.is_playing);
+  const isPaused = boolOrNull(stateData?.is_paused ?? lastState?.is_paused);
+  const isReloadingDomain = phase === "reloading";
+  const isImportingAssets = null;
+  const isInPlaymode = isPlaying === true || phase === "playing" || phase === "paused";
+
+  const busyReasons: string[] = [];
+  if (isCompiling === true || phase === "compiling") busyReasons.push("compiling");
+  if (isReloadingDomain) busyReasons.push("reloading_domain");
+  if (isImportingAssets === true) busyReasons.push("importing_assets");
+  if (isInPlaymode) busyReasons.push("playmode");
+
+  const reachable = endpointPresent && healthRecord?.handler_registered === true;
+  const stateReachable = stateData !== null;
+  const livenessReachable = livenessData !== null;
+  if (endpointPresent && !livenessReachable) diagnostics.liveness_error = "liveness endpoint unavailable";
 
   return {
     running: pid !== null,
@@ -137,6 +260,26 @@ export async function editorStatus(opts?: { project?: string }): Promise<EditorS
     transport: endpoint.transport,
     socket: endpoint.transport === "unix" ? endpointPresent : false,
     health: healthData ?? null,
+    reachable,
+    phase,
+    state_reachable: stateReachable,
+    liveness_reachable: livenessReachable,
+    is_playing: isPlaying,
+    is_in_playmode: isInPlaymode,
+    is_compiling: isCompiling,
+    is_paused: isPaused,
+    is_reloading_domain: isReloadingDomain,
+    is_importing_assets: isImportingAssets,
+    is_busy: busyReasons.length > 0,
+    busy_reasons: busyReasons,
+    alive_ms_ago: typeof livenessData?.alive_ms_ago === "number" ? livenessData.alive_ms_ago : null,
+    last_heartbeat_ms: typeof livenessData?.last_heartbeat_ms === "number" ? livenessData.last_heartbeat_ms : null,
+    stale: livenessData?.phase_override === "unresponsive",
+    domain_reload: stateData?.domain_reload ?? null,
+    run_in_background: boolOrNull(stateData?.run_in_background),
+    unity_version: stringOrNull(stateData?.unity_version ?? lastState?.unity_version),
+    platform: stringOrNull(stateData?.platform ?? lastState?.platform),
+    ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
   };
 }
 

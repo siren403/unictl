@@ -13,6 +13,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Promoted `editor status` to a rich ready-state snapshot, taught `wait` and
+  `editor compile --wait` to share that readiness signal, and allowed
+  `editor compile --wait` to join in-flight compile/import/reload windows
+  instead of failing on transient stale heartbeat or IPC unavailability.
 - Documented the stable `unictl test` control contract: batch EditMode uses the
   bundled `-executeMethod`/`TestRunnerApi` runner, editor lane uses the
   progress-file job contract, and lane auto-routing is explicit.

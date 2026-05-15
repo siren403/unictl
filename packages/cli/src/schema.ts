@@ -185,17 +185,19 @@ export const commandSchemas: Record<string, CommandSchema> = {
     name: "editor.status",
     verb: "status",
     noun: "editor",
-    summary: "Report whether the Unity editor is running and whether the IPC endpoint is reachable.",
+    summary: "Report Unity editor process, IPC reachability, and rich ready-state snapshot fields.",
     when: [
       "Checking current editor process and IPC health before sending live-editor commands.",
       "Diagnosing project/pipe mismatches.",
+      "Agents need one machine-readable snapshot for compiling, reloading, Play Mode, heartbeat, and domain reload state.",
     ],
     when_not: [
       "You need to wait for a future state transition — use `unictl wait <state>`.",
+      "You are considering raw `command editor_control -p action=status` — prefer this first-class command.",
     ],
     args: [...COMMON_ARGS],
     examples: [
-      { cmd: "unictl editor status --project D:/workspace/unity/MyProject", intent: "check editor process and IPC endpoint status" },
+      { cmd: "unictl editor status --project D:/workspace/unity/MyProject", intent: "check editor process, IPC reachability, and ready-state fields" },
     ],
     exit_codes: [0, 1],
     related: ["health", "wait"],

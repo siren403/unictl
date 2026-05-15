@@ -16,6 +16,7 @@
 
 import { defineCommand } from "citty";
 import { command as ipcCommand } from "./client";
+import { editorStatus, type EditorStatusResult } from "./editor";
 import { emit, exitCodeFor, type OutputFlags } from "./output";
 import { lookupCommandSchema } from "./schema";
 import { errorEnvelope } from "./error";
@@ -98,6 +99,32 @@ function notImplemented(verb: string, plannedPhase: string, related: readonly st
     ...env,
     error: { ...env.error, exit_code: 78 },
   };
+}
+
+function statusIsCompileBusy(status: EditorStatusResult | null): boolean {
+  return status?.is_compiling === true ||
+    status?.is_reloading_domain === true ||
+    status?.is_importing_assets === true ||
+    status?.phase === "compiling" ||
+    status?.phase === "reloading";
+}
+
+function resultErrorKind(result: unknown): string | null {
+  if (!result || typeof result !== "object") return null;
+  const record = result as Record<string, unknown>;
+  const error = record.error;
+  if (error && typeof error === "object" && typeof (error as Record<string, unknown>).kind === "string") {
+    return (error as Record<string, string>).kind;
+  }
+  if (typeof record.kind === "string") return record.kind;
+  return null;
+}
+
+function isBusyKind(kind: string | null): boolean {
+  return kind === "editor_busy" ||
+    kind === "editor_busy_compiling" ||
+    kind === "editor_busy_updating" ||
+    kind === "editor_reload_active";
 }
 
 // ---------------------------------------------------------------------------
@@ -190,11 +217,76 @@ function makeEditorActionCommand(action: string, summary: string) {
       }
 
       try {
-        const result = await ipcCommand(
-          "editor_control",
-          { action },
-          { project: args.project as string | undefined },
-        );
+        let preStatus: EditorStatusResult | null = null;
+        let joinedExisting = false;
+        if (waitTarget !== null && action === "compile") {
+          try {
+            preStatus = await editorStatus({ project: args.project as string | undefined });
+          } catch {
+            preStatus = null;
+          }
+        }
+
+        let result: unknown;
+        if (action === "compile" && waitTarget !== null && statusIsCompileBusy(preStatus)) {
+          joinedExisting = true;
+          result = {
+            success: true,
+            message: "Joined existing compile/import/reload",
+            data: preStatus,
+          };
+        } else {
+          result = await ipcCommand(
+            "editor_control",
+            { action },
+            { project: args.project as string | undefined },
+          );
+        }
+
+        const kind = resultErrorKind(result);
+        const failed = result && typeof result === "object" &&
+          (((result as { success?: unknown }).success === false) || ((result as { ok?: unknown }).ok === false));
+        if (failed) {
+          if (action === "compile" && waitTarget !== null && isBusyKind(kind)) {
+            let busyStatus: EditorStatusResult | null = null;
+            try {
+              busyStatus = await editorStatus({ project: args.project as string | undefined });
+            } catch {
+              busyStatus = null;
+            }
+            if (statusIsCompileBusy(busyStatus)) {
+              joinedExisting = true;
+              result = {
+                success: true,
+                message: "Joined existing compile/import/reload after busy response",
+                busy_response: result,
+                data: busyStatus,
+              };
+            } else {
+              const env = errorEnvelope({
+                kind: kind ?? "ipc_error",
+                message: `editor_control ${action} rejected the request.`,
+                recovery: "Run 'unictl editor status' and retry when the editor is ready.",
+                related: [`editor.${action}`, "editor.status", "wait"],
+                context: { action, result },
+              });
+              const payload = { ...env, error: { ...env.error, exit_code: isBusyKind(kind) ? 3 : 125 } };
+              emit("new", payload, flags);
+              process.exit(exitCodeFor(payload));
+            }
+          } else {
+            const env = errorEnvelope({
+              kind: kind ?? "ipc_error",
+              message: `editor_control ${action} rejected the request.`,
+              recovery: "Run 'unictl editor status' and retry when the editor is ready.",
+              related: [`editor.${action}`, "editor.status", "wait"],
+              context: { action, result },
+            });
+            const payload = { ...env, error: { ...env.error, exit_code: isBusyKind(kind) ? 3 : 125 } };
+            emit("new", payload, flags);
+            process.exit(exitCodeFor(payload));
+          }
+        }
 
         if (waitTarget === null) {
           // Fire-and-forget — return immediately as before.
@@ -221,6 +313,7 @@ function makeEditorActionCommand(action: string, summary: string) {
               alive_ms_ago: waitEnv.alive_ms_ago,
               elapsed_ms: waitEnv.elapsed_ms,
             },
+            ...(joinedExisting ? { joined_existing: true } : {}),
           };
           emit("new", payload, flags);
           process.exit(0);
@@ -234,11 +327,40 @@ function makeEditorActionCommand(action: string, summary: string) {
           state: waitEnv.state,
           elapsed_ms: waitEnv.elapsed_ms,
           error: waitEnv.error,
+          ...(joinedExisting ? { joined_existing: true } : {}),
         };
         emit("new", payload, flags);
         process.exit(exitCodeFor(payload));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
+        if (action === "compile" && waitTarget !== null) {
+          const outcome = await runWait({
+            state: waitTarget,
+            timeoutSeconds,
+            project: args.project as string | undefined,
+          });
+          const waitEnv = outcomeToEnvelope(outcome);
+          if (waitEnv.ok) {
+            const payload = {
+              ok: true,
+              action,
+              joined_existing: true,
+              result: {
+                success: true,
+                message: "Joined existing compile/import/reload after transient IPC failure",
+                ipc_error_before_join: message,
+              },
+              wait: {
+                state: waitEnv.state,
+                phase: waitEnv.phase,
+                alive_ms_ago: waitEnv.alive_ms_ago,
+                elapsed_ms: waitEnv.elapsed_ms,
+              },
+            };
+            emit("new", payload, flags);
+            process.exit(0);
+          }
+        }
         const env = errorEnvelope({
           kind: "ipc_error",
           message,

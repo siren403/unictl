@@ -62,11 +62,12 @@
       "subcommands": [
         {
           "name": "status",
-          "description": "Show Unity editor running status.",
+          "description": "Show Unity editor process, IPC reachability, and rich ready-state fields.",
           "key_flags": [
             "--project"
           ],
-          "help": "unictl editor status --help"
+          "help": "unictl editor status --help",
+          "schema": "unictl schema editor.status"
         },
         {
           "name": "open",
@@ -388,8 +389,8 @@
         "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
         "Successful output includes lane=batch|editor. Editor lane also includes job_id and progress_file.",
         "--timeout accepts 30s, 2m, 1h, bare seconds, or 0 unbounded.",
-        "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via test_run tool. Poll Library/unictl-tests/<job-id>.json for progress.",
-        "For PlayMode editor lane, inspect domain reload state with command editor_control -p action=status; data.domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
+        "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via internal test_run tool; prefer this first-class command over raw command test_run.",
+        "For PlayMode editor-lane diagnostics, inspect domain reload state with unictl editor status; domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
         "Batchmode lane: --batch required or editor not running → headless Unity process using Unictl.BatchTestRunner.RunFromCommandLine."
       ]
     }
@@ -397,7 +398,9 @@
   "builtins": [
     {
       "name": "test_run",
-      "description": "Run Unity tests via TestRunnerApi (editor lane). Returns {ok,job_id,state:'queued'} immediately. Poll Library/unictl-tests/<job-id>.json for progress.",
+      "description": "Internal editor-lane test tool. Prefer unictl test; raw callers must parse the progress file as JSON, not grep text.",
+      "surface": "internal",
+      "preferred_command": "unictl test",
       "parameters": [
         "platform",
         "assembly",

@@ -739,6 +739,10 @@ const AGENT_HELP_BANNER = `Agent / automation:
     unictl schema
     unictl schema <command>
 
+  Prefer first-class commands over raw builtin tools:
+    unictl editor status / unictl wait idle
+    unictl test
+
   Do not parse human help output for flags, risks, or exit codes.`;
 
 // v0.6 → v0.7 verb-noun migration hints. When a user invokes a legacy
@@ -761,6 +765,7 @@ function suggestV07Mapping(toolName: string, params: Record<string, unknown>): s
       case "stop":     return "unictl editor stop";
       case "compile":  return "unictl editor compile";
       case "refresh":  return "unictl editor refresh";
+      case "status":   return "unictl editor status";
       default:         return null;
     }
   }
