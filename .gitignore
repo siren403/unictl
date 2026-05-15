@@ -7,6 +7,7 @@ native/unictl_native/target/
 sandbox/*/Library/
 sandbox/*/Temp/
 sandbox/*/Logs/
+sandbox/*/TestResults/
 sandbox/*/UserSettings/
 sandbox/*/Build/
 sandbox/*/Builds/

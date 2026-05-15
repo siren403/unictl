@@ -143,6 +143,19 @@ unictl test --batch --platform editmode \
   --results TestResults/unit.xml
 ```
 
+### Sandbox smoke fixture
+
+The repository sandbox includes `UnictlSmokeProject.Tests.EditMode`, a minimal
+EditMode NUnit assembly used to verify batch and editor-lane completion
+detection:
+
+```powershell
+unictl test --batch --platform editmode `
+  --filter assembly:UnictlSmokeProject.Tests.EditMode `
+  --project sandbox/UnictlSmokeProject `
+  --results sandbox/UnictlSmokeProject/TestResults/batch-editmode-results.xml
+```
+
 ### Run a specific test class
 
 ```bash

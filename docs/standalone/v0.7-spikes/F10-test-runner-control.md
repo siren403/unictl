@@ -168,11 +168,13 @@ Native Unity exit code is supporting evidence, never the sole success signal.
    `BatchTestRunner` executeMethod entrypoint.
 4. Done: raise editor-lane heartbeat stale default from 5s to 30s and include
    structured stale context.
-5. Next: add sandbox smoke scripts for:
+5. Done: add a sandbox EditMode NUnit fixture and verify:
    - batch EditMode via executeMethod
    - editor-lane EditMode job progress completion
+6. Next: add automated smoke scripts for:
+   - repeatable batch/editor EditMode verification
    - PlayMode preflight rejection with domain reload context
-6. Consider a future `unictl test status <job-id>` or `unictl wait test`
+7. Consider a future `unictl test status <job-id>` or `unictl wait test`
    surface only after the progress-file contract is stable.
 
 ---
@@ -183,5 +185,6 @@ Native Unity exit code is supporting evidence, never the sole success signal.
 - CLI output makes the selected lane explicit.
 - Timeout parsing cannot misread `5m` as `5s`.
 - `--results` under project `Temp/` is rejected before launching Unity.
-- Current sandbox batch EditMode smoke passes or fails with a diagnostic that
-  identifies the missing test assembly / XML / Unity crash reason.
+- Current sandbox batch EditMode smoke passes with `lane=batch`.
+- Current sandbox editor-lane EditMode smoke passes with `lane=editor`,
+  `job_id`, and `progress_file`.

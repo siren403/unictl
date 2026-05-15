@@ -23,6 +23,8 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - `unictl test` now rejects `--results` paths under the Unity project `Temp/`
   directory before launch because Unity may delete that directory during batch
   lifecycle cleanup after XML is saved.
+- Added a sandbox EditMode NUnit fixture used to verify both batch
+  `-executeMethod` and editor-lane test completion detection.
 - Added regression coverage for the Unity `.meta` GUID release guard, including
   duplicate GUIDs, known placeholder GUIDs, and sequential-looking sample GUIDs.
 - Added `execute_menu` menu discovery diagnostics: `action=search` and
