@@ -176,7 +176,9 @@ unictl test --batch --platform editmode \
 
 ## Log Files
 
-Unity batch output is written to `Library/unictl-tests/test-<timestamp>.log` inside the project root. The absolute path is included in the `log_file` field of the success JSON output.
+Batch output is written to `Library/unictl-tests/test-<timestamp>.log` inside the project root. Editor-lane output uses the current editor session log at `Library/unictl-state/editor-current.log` when the editor was opened through `unictl editor open`.
+
+The absolute path is included in the `log_file` field of the JSON output. `log_file` is for Unity/editor diagnostics such as `Debug.LogError`, `Debug.LogException`, and unictl callback messages. The `results_file` XML is the source of truth for test failures and thrown test exceptions.
 
 ---
 
@@ -201,19 +203,20 @@ See [Known Limitations (Editor Lane)](#known-limitations-editor-lane) below.
 
 ## Editor Lane (v0.6.0+)
 
-When the Unity editor is running on the target project, `unictl test` automatically uses the editor lane — no `--batch` flag needed.
+`unictl test` auto-routes by editor state. When the Unity editor is running on the target project, it uses the editor lane. When no editor is reachable, it uses batchmode. Agents should not run `editor status` first just to choose a test lane.
 
 ```
 unictl test --platform <editmode|playmode> --results <path>
 ```
 
-If the editor is not running, unictl auto-routes to the batch lane.
+Use `--batch` only when you intentionally require headless batchmode. It is a force-batch flag and fails if the target editor is already running.
 
 ### How It Works
 
 1. CLI sends `test_run` IPC call to the live editor → editor responds immediately with `{ok: true, job_id, state: "queued"}`.
 2. CLI polls `Library/unictl-tests/<job-id>.json` for progress (250 ms initial, up to 2 s backoff).
 3. Heartbeat staleness is detected at 30 s; if the editor PID dies or the session ID changes, the CLI exits with the appropriate error kind.
+4. Successful editor-lane output reports `log_file` as `Library/unictl-state/editor-current.log`; this is the current editor session log, not a per-test log.
 
 Agents should prefer the first-class `unictl test` command. If a raw
 `unictl command test_run` job has already been started, use the companion wait

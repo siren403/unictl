@@ -370,6 +370,14 @@
       "since_version": "0.6.0"
     },
     {
+      "kind": "deprecated_log_source",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 2,
+      "hint_text": "The requested log source is deprecated. Use editor_log action=tail, search, or errors against the project-scoped editor log.",
+      "hint_command": "unictl command editor_log -p action=tail",
+      "since_version": "0.7.8"
+    },
+    {
       "kind": "not_implemented",
       "emitted_from": ["cli"],
       "exit_code": 78,

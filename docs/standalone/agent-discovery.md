@@ -28,6 +28,9 @@ not be the richer path for common agent workflows:
 - Prefer `unictl editor status` over `unictl command editor_control -p action=status`.
 - Prefer `unictl wait <state>` over ad-hoc `editor_control` polling.
 - Prefer `unictl test` over raw `unictl command test_run`.
+- Prefer `unictl command editor_log -p action=tail|search|errors` over
+  deprecated `game_logs`; project-scoped `editor_log` is the reliable log
+  source for agent diagnostics.
 - If a raw async job is exposed, provide a first-class wait/status companion
   before documenting progress-file parsing as an agent workflow.
 

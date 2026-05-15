@@ -209,9 +209,9 @@ export const commandSchemas: Record<string, CommandSchema> = {
     name: "editor.open",
     verb: "open",
     noun: "editor",
-    summary: "Open the Unity editor and optionally wait for a target state.",
+    summary: "Open the Unity editor with project-scoped logs and optionally wait for a target state.",
     when: [
-      "Starting a project editor session for live IPC commands.",
+      "Starting a project editor session for live IPC commands and project-scoped editor logs.",
       "Agent automation needs a ready-sync signal before sending editor-lane commands.",
     ],
     when_not: [
@@ -225,7 +225,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
       { name: "timeout", type: "duration", default: "auto", required: false, description: "Wait timeout (e.g. 30s, 2m, 0 unbounded)." },
     ],
     examples: [
-      { cmd: "unictl editor open --wait reachable --timeout 300s", intent: "open editor and wait until IPC handler is registered" },
+      { cmd: "unictl editor open --wait reachable --timeout 300s", intent: "open editor, create Library/unictl-state/editor-current.log, and wait until IPC handler is registered" },
       { cmd: "unictl editor open --skip-precompile", intent: "open without the batchmode precompile guard" },
     ],
     exit_codes: [0, 1, 2, 3, 124, 125],
@@ -425,7 +425,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     ],
     examples: [
       { cmd: "unictl command list", intent: "enumerate all [UnictlTool] registrations at runtime (builtin + consumer-defined)" },
-      { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the file-based Editor.log" },
+      { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the project-scoped editor log when available" },
       { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
       { cmd: "unictl command my_save_inspector -p target=Player", intent: "invoke a consumer-defined [UnictlTool]" },
       { cmd: "unictl schema command", intent: "emit this command contract as JSON" },
@@ -471,6 +471,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     when: [
       "Running EditMode or PlayMode tests from an agent or CI workflow.",
       "You want unictl to handle editor-lane completion detection instead of parsing raw test_run progress files.",
+      "You want one command to auto-route: live editor uses editor lane; no editor uses batchmode.",
     ],
     when_not: [
       "You already started a raw editor-lane test_run job and only need to wait for it — use `unictl test wait <job-id>`.",
@@ -480,14 +481,14 @@ export const commandSchemas: Record<string, CommandSchema> = {
       ...COMMON_ARGS,
       { name: "batch", type: "bool", default: false, required: false, description: "Force batchmode lane. Fails if the editor is already running." },
       { name: "platform", type: "enum", enumValues: ["editmode", "playmode"], required: true, description: "Unity test platform." },
-      { name: "results", type: "path", required: true, description: "Output NUnit XML path. Must not be under the Unity project Temp directory." },
+      { name: "results", type: "path", required: true, description: "Output NUnit XML path. This is the source of truth for test failures and thrown test exceptions. Must not be under the Unity project Temp directory." },
       { name: "filter", type: "string", required: false, description: "Unity -testFilter expression, or assembly:<AssemblyName>." },
       { name: "timeout", type: "duration", required: false, description: "Wall-clock timeout (30s, 2m, 1h, bare seconds, or 0 unlimited)." },
       { name: "allow-unsaved-scenes", type: "bool", default: false, required: false, description: "Editor lane: bypass dirty-scene preflight check for PlayMode." },
       { name: "allow-reload-active", type: "bool", default: false, required: false, description: "Editor lane: attempt PlayMode tests with full domain reload enabled." },
     ],
     examples: [
-      { cmd: "unictl test --platform editmode --results TestResults/results.xml", intent: "run EditMode tests using the live editor if reachable, otherwise batchmode" },
+      { cmd: "unictl test --platform editmode --results TestResults/results.xml", intent: "run EditMode tests using the live editor if reachable, otherwise batchmode; inspect results_file for failures and log_file for Unity logs" },
       { cmd: "unictl test --batch --platform editmode --filter assembly:MyTests --results TestResults/editmode.xml --timeout 5m", intent: "force headless EditMode tests with an assembly filter" },
     ],
     exit_codes: [0, 1, 2, 3, 4, 5, 6, 7, 8],

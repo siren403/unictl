@@ -13,6 +13,11 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- `editor open` now starts Unity with project-scoped editor and UPM logs under
+  `Library/unictl-state/`, `editor_log` reads the project log by default, and
+  editor-lane `unictl test` results now include the current editor session
+  `log_file`. Deprecated `game_logs` now fails with a replacement hint instead
+  of exposing an unreliable in-memory buffer.
 - Promoted `editor status` to a rich ready-state snapshot, taught `wait` and
   `editor compile --wait` to share that readiness signal, and allowed
   `editor compile --wait` to join in-flight compile/import/reload windows

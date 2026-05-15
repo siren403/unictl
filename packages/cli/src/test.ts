@@ -6,6 +6,7 @@ import { readUnityVersion, resolveUnityBinary, killProcess } from "./process";
 import { command, health } from "./client";
 import { errorExit } from "./error";
 import { parseDuration } from "./wait";
+import { getProjectEditorLogFiles } from "./log-paths";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -452,7 +453,7 @@ async function waitForEditorTestJob(args: WaitForEditorTestJobArgs): Promise<Tes
           results_file: job.results_path ?? args.resultsFile ?? "",
           job_id: job.job_id ?? jobId,
           progress_file: progressPath,
-          log_file: null as unknown as string,
+          log_file: getProjectEditorLogFiles(projectRoot).editor_log_file,
           duration_ms: durationMs,
           state: "finished",
           terminal: true,
@@ -623,8 +624,8 @@ QUICK START:
   unictl test --batch --platform editmode --results out.xml --timeout 300
 
 LANE SELECTION:
-  (default)  Editor lane — uses running Unity editor via IPC (fast, no relaunch)
-  --batch    Batchmode  — launches a new headless Unity process (use when editor is not running)
+  (default)  Auto-route: running editor → editor lane; no editor → batchmode
+  --batch    Force batchmode; fails if the target editor is already running
 
 PLATFORM:
   editmode   Edit Mode tests (no player build required, fastest)
@@ -644,7 +645,11 @@ EXIT CODES:
   5   unity_crash (crash pattern or abnormal exit)
   6   test_timeout (wall-clock timeout exceeded)
   7   test_invalid_filter (Unity rejected the filter expression)
-  8   editor_died / editor_session_changed / test_heartbeat_stale / unknown_test_failure`,
+  8   editor_died / editor_session_changed / test_heartbeat_stale / unknown_test_failure
+
+OUTPUT:
+  results_file is the source of truth for test failures and thrown test exceptions.
+  log_file points to Unity logs: batch uses a per-run log; editor lane uses the current editor session log.`,
   },
   args: {
     batch: {

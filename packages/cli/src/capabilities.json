@@ -401,9 +401,11 @@
       ],
       "notes": [
         "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
-        "Successful output includes lane=batch|editor. Editor lane also includes job_id and progress_file.",
+        "Successful output includes lane=batch|editor. Editor lane also includes job_id, progress_file, and log_file pointing to the current editor session log.",
+        "results_file is the source of truth for test failures and thrown test exceptions; log_file is for Unity/editor diagnostics such as Debug.LogError, Debug.LogException, and unictl callbacks.",
         "--timeout accepts 30s, 2m, 1h, bare seconds, or 0 unbounded.",
-        "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via internal test_run tool; prefer this first-class command over raw command test_run.",
+        "Default lane routing: --batch omitted + editor running → IPC via internal test_run tool; --batch omitted + editor not running → batchmode.",
+        "--batch is force-batch and fails if the target editor is already running.",
         "If you already started raw command test_run, use unictl test wait <job-id>; do not grep the progress file text.",
         "For PlayMode editor-lane diagnostics, inspect domain reload state with unictl editor status; domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
         "Batchmode lane: --batch required or editor not running → headless Unity process using Unictl.BatchTestRunner.RunFromCommandLine."

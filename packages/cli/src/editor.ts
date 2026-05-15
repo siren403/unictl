@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, rmSync } from "fs";
+import { existsSync, mkdirSync, readFileSync, rmSync } from "fs";
 import { join } from "path";
 import {
   endpointSeemsPresent,
@@ -16,6 +16,7 @@ import {
   readUnityVersion,
   resolveUnityBinary,
 } from "./process";
+import { getProjectEditorLogFiles } from "./log-paths";
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -377,8 +378,16 @@ export async function editorOpen(opts?: {
     }
   }
 
+  const logFiles = getProjectEditorLogFiles(projectRoot);
+  mkdirSync(logFiles.state_dir, { recursive: true });
+
   // Launch Unity (fully detached so interrupt won't kill it)
-  const proc = Bun.spawn([unityBin, "-projectPath", projectRoot], {
+  const proc = Bun.spawn([
+    unityBin,
+    "-projectPath", projectRoot,
+    "-logFile", logFiles.editor_log_file,
+    "-upmLogFile", logFiles.upm_log_file,
+  ], {
     detached: true,
     stdio: ["ignore", "ignore", "ignore"],
   });
@@ -394,7 +403,13 @@ export async function editorOpen(opts?: {
       if (endpointIsReachable(endpoint)) {
         const healthData = await tryHealth(endpoint);
         if (healthData !== null) {
-          return { opened: true, pid: launchedPid };
+          return {
+            opened: true,
+            pid: launchedPid,
+            editor_log_file: logFiles.editor_log_file,
+            upm_log_file: logFiles.upm_log_file,
+            log_scope: logFiles.log_scope,
+          };
         }
       }
     } catch {

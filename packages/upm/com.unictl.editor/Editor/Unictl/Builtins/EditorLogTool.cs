@@ -8,23 +8,15 @@ using UnityEngine;
 
 namespace Unictl.Tools
 {
-    [UnictlTool(Name = "editor_log", Description = "Read Unity editor logs. IMPORTANT: compile errors (CSxxxx) only appear in tail/search/errors (file-based), NOT in game_logs (memory-based Debug.Log buffer).")]
+    [UnictlTool(Name = "editor_log", Description = "Read Unity editor logs from the project-scoped editor log when available. Use tail/search/errors; game_logs is deprecated.")]
     public static class EditorLogTool
     {
-        private static readonly List<LogEntry> GameLogs = new List<LogEntry>();
-        private const int MaxGameLogs = 500;
-
         private static readonly Regex CompileErrorRegex = new Regex(@"\berror\s+CS\d{4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex ExceptionRegex = new Regex(@"^\S*Exception:", RegexOptions.Compiled);
 
-        static EditorLogTool()
-        {
-            Application.logMessageReceived += OnLogMessage;
-        }
-
         public class Parameters
         {
-            [ToolParameter("Action: tail, search, errors, game_logs, clear_game_logs. Use 'errors' to check compile/exception failures.", Required = true, Enum = "tail,search,errors,game_logs,clear_game_logs")]
+            [ToolParameter("Action: tail, search, errors, game_logs, clear_game_logs. game_logs and clear_game_logs are deprecated; use tail/search/errors.", Required = true, Enum = "tail,search,errors,game_logs,clear_game_logs")]
             public string Action { get; set; }
         }
 
@@ -39,8 +31,9 @@ namespace Unictl.Tools
                 case "tail": return DoTail(p);
                 case "search": return DoSearch(p);
                 case "errors": return DoErrors(p);
-                case "game_logs": return DoGameLogs(p);
-                case "clear_game_logs": return DoClearGameLogs();
+                case "game_logs":
+                case "clear_game_logs":
+                    return DeprecatedGameLogsResponse(action);
                 default:
                     return new ErrorResponse($"Unknown action: {action}");
             }
@@ -49,7 +42,8 @@ namespace Unictl.Tools
         private static object DoTail(ToolParams p)
         {
             var lines = p.GetInt("lines", 50).Value;
-            var logPath = GetEditorLogPath();
+            var logSource = ResolveEditorLogSource();
+            var logPath = logSource.LogPath;
 
             if (!File.Exists(logPath))
                 return new ErrorResponse($"Editor log not found: {logPath}");
@@ -60,7 +54,9 @@ namespace Unictl.Tools
 
             return new SuccessResponse("Editor log tail (file-based, includes compile errors)", new
             {
-                source = "Editor.log file",
+                source = logSource.Source,
+                fallback_used = logSource.FallbackUsed,
+                warning = logSource.Warning,
                 includes_compile_errors = true,
                 log_path = logPath,
                 total_lines = allLines.Count,
@@ -75,7 +71,8 @@ namespace Unictl.Tools
             if (!ok) return new ErrorResponse(err);
 
             var lines = p.GetInt("lines", 100).Value;
-            var logPath = GetEditorLogPath();
+            var logSource = ResolveEditorLogSource();
+            var logPath = logSource.LogPath;
 
             if (!File.Exists(logPath))
                 return new ErrorResponse($"Editor log not found: {logPath}");
@@ -89,9 +86,12 @@ namespace Unictl.Tools
 
             return new SuccessResponse($"Found {matches.Length} matches for '{pattern}' (file-based)", new
             {
-                source = "Editor.log file",
+                source = logSource.Source,
+                fallback_used = logSource.FallbackUsed,
+                warning = logSource.Warning,
                 includes_compile_errors = true,
                 log_path = logPath,
+                match_mode = "literal_substring",
                 pattern,
                 matches
             });
@@ -100,7 +100,8 @@ namespace Unictl.Tools
         private static object DoErrors(ToolParams p)
         {
             var lines = p.GetInt("lines", 100).Value;
-            var logPath = GetEditorLogPath();
+            var logSource = ResolveEditorLogSource();
+            var logPath = logSource.LogPath;
 
             if (!File.Exists(logPath))
                 return new ErrorResponse($"Editor log not found: {logPath}");
@@ -126,7 +127,9 @@ namespace Unictl.Tools
                 total == 0 ? "No compile errors or exceptions found" : $"Found {compileTrimmed.Length} compile errors, {exceptionsTrimmed.Length} exceptions",
                 new
                 {
-                    source = "Editor.log file (filtered)",
+                    source = logSource.Source,
+                    fallback_used = logSource.FallbackUsed,
+                    warning = logSource.Warning,
                     log_path = logPath,
                     compile_errors = compileTrimmed,
                     exceptions = exceptionsTrimmed,
@@ -134,60 +137,17 @@ namespace Unictl.Tools
                 });
         }
 
-        private static object DoGameLogs(ToolParams p)
+        private static object DeprecatedGameLogsResponse(string action)
         {
-            var count = p.GetInt("lines", 50).Value;
-            var level = p.Get("level");
-
-            List<LogEntry> filtered;
-            lock (GameLogs)
+            return new ErrorResponse("game_logs is deprecated; use editor_log tail/search/errors instead", new
             {
-                filtered = level != null
-                    ? GameLogs.Where(e => string.Equals(e.level, level, StringComparison.OrdinalIgnoreCase)).ToList()
-                    : new List<LogEntry>(GameLogs);
-            }
-
-            var result = filtered.TakeLast(count).ToArray();
-
-            return new SuccessResponse($"Game logs ({result.Length} entries from Debug.Log buffer — does NOT include compile errors)", new
-            {
-                source = "Application.logMessageReceived buffer (Debug.Log/LogWarning/LogError only)",
-                includes_compile_errors = false,
-                hint = "To check compile errors, use action=errors or action=tail/search.",
-                total_captured = GameLogs.Count,
-                returned = result.Length,
-                filter_level = level,
-                entries = result
+                deprecated = true,
+                action,
+                kind = "deprecated_log_source",
+                message = "game_logs used an in-memory Application.logMessageReceived buffer and is not reliable across domain reloads or editor restarts.",
+                replacement = "editor_log",
+                replacement_actions = new[] { "tail", "search", "errors" }
             });
-        }
-
-        private static object DoClearGameLogs()
-        {
-            int count;
-            lock (GameLogs)
-            {
-                count = GameLogs.Count;
-                GameLogs.Clear();
-            }
-            return new SuccessResponse($"Cleared {count} game log entries");
-        }
-
-        private static void OnLogMessage(string condition, string stackTrace, LogType type)
-        {
-            var entry = new LogEntry
-            {
-                timestamp = DateTime.Now.ToString("HH:mm:ss.fff"),
-                level = type.ToString(),
-                message = condition,
-                stack_trace = type == LogType.Exception || type == LogType.Error ? stackTrace : null
-            };
-
-            lock (GameLogs)
-            {
-                GameLogs.Add(entry);
-                if (GameLogs.Count > MaxGameLogs)
-                    GameLogs.RemoveAt(0);
-            }
         }
 
         private static List<string> ReadLinesShared(string path)
@@ -201,7 +161,37 @@ namespace Unictl.Tools
             return lines;
         }
 
-        private static string GetEditorLogPath()
+        private static LogSource ResolveEditorLogSource()
+        {
+            var projectLogPath = GetProjectEditorLogPath();
+            if (File.Exists(projectLogPath))
+            {
+                return new LogSource
+                {
+                    Source = "project",
+                    LogPath = projectLogPath,
+                    FallbackUsed = false,
+                    Warning = null
+                };
+            }
+
+            var hostLogPath = GetHostEditorLogPath();
+            return new LogSource
+            {
+                Source = "host",
+                LogPath = hostLogPath,
+                FallbackUsed = true,
+                Warning = "Project-scoped editor log was not found. This fallback reads the host-wide Unity Editor.log and may include unrelated projects. Start the editor through unictl editor open to create the project log."
+            };
+        }
+
+        private static string GetProjectEditorLogPath()
+        {
+            var projectRoot = Directory.GetParent(Application.dataPath).FullName;
+            return Path.Combine(projectRoot, "Library", "unictl-state", "editor-current.log");
+        }
+
+        private static string GetHostEditorLogPath()
         {
 #if UNITY_EDITOR_WIN
             return Path.Combine(
@@ -218,13 +208,12 @@ namespace Unictl.Tools
 #endif
         }
 
-        [Serializable]
-        private class LogEntry
+        private class LogSource
         {
-            public string timestamp;
-            public string level;
-            public string message;
-            public string stack_trace;
+            public string Source;
+            public string LogPath;
+            public bool FallbackUsed;
+            public string Warning;
         }
     }
 }
