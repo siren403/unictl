@@ -4,7 +4,7 @@
   "description": "Unity Editor control CLI via Named Pipe (Windows) / Unix Socket (macOS) IPC",
   "type": "module",
   "bin": {
-    "unictl": "./bin.js"
+    "unictl": "bin.js"
   },
   "files": [
     "src/",
@@ -12,7 +12,7 @@
   ],
   "repository": {
     "type": "git",
-    "url": "https://github.com/siren403/unictl.git"
+    "url": "git+https://github.com/siren403/unictl.git"
   },
   "license": "MIT",
   "keywords": [
