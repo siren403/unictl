@@ -29,6 +29,60 @@ imported and compiled there is no IPC endpoint for `unictl` to call, so an alrea
 may need a Package Manager refresh/re-resolve or an editor restart before live commands work.
 For deterministic first install checks, close the Editor and run `unictl compile`.
 
+## Agent ready-state workflow
+
+Use first-class ready-state commands instead of ad-hoc sleep loops or grepping
+human help output.
+
+```bash
+# Open the editor and return only when IPC commands are reachable.
+unictl editor open --wait reachable --timeout 300s --project /abs/path/to/project
+
+# One-shot status snapshot for branching.
+unictl editor status --project /abs/path/to/project
+
+# Wait for a future state transition.
+unictl wait idle --timeout 2m --project /abs/path/to/project
+
+# Trigger compile/import and return only when the editor is idle again.
+unictl editor compile --wait idle --timeout 5m --project /abs/path/to/project
+```
+
+`editor status` is the single ready-state snapshot for agents. Branch on the
+machine-readable fields instead of parsing log text:
+
+| Field | Meaning |
+|-------|---------|
+| `reachable` | IPC handler is registered and editor commands can be sent |
+| `phase` | Current observed phase (`idle`, `playing`, `compiling`, `reloading`, etc.) |
+| `is_compiling` | Unity reports script compilation in progress |
+| `is_reloading_domain` | Domain reload is active or recently observed |
+| `is_in_playmode` / `is_playing` | Play Mode state |
+| `is_busy` / `busy_reasons` | Aggregated busy signal for compile/import/play/reload windows |
+
+Preferred idioms:
+
+```bash
+# Good: command-owned wait.
+unictl editor refresh --wait idle --timeout 2m --project /abs/path/to/project
+
+# Good: generic state wait.
+unictl wait reachable --timeout 30s --project /abs/path/to/project
+
+# Avoid: shell sleep loops over guessed fields.
+until unictl editor status | jq -e '.is_compiling == false'; do sleep 2; done
+```
+
+`unictl test` also owns its lane choice. Do not pre-check editor status just to
+choose a test lane; use one command:
+
+```bash
+unictl test --platform editmode --results TestResults/results.xml --project /abs/path/to/project
+```
+
+If the editor is reachable, it uses the editor lane. If not, it auto-routes to
+batchmode. Use `--batch` only when you intentionally require headless batchmode.
+
 ## Build lanes
 
 `unictl` routes build requests automatically:
