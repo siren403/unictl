@@ -11,6 +11,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.8] - 2026-05-15
+
 ### Fixed
 
 - `editor open` now starts Unity with project-scoped editor and UPM logs under
