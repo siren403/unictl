@@ -7,6 +7,7 @@ using UnityEditor.SceneManagement;
 using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
+using Unictl.TestRunner;
 
 namespace Unictl.Tools
 {
@@ -154,6 +155,7 @@ namespace Unictl.Tools
                 is_playing = EditorApplication.isPlaying,
                 is_compiling = EditorApplication.isCompiling,
                 is_paused = EditorApplication.isPaused,
+                domain_reload = TestPreflight.GetDomainReloadStatus(),
                 run_in_background = Application.runInBackground,
                 unity_version = Application.unityVersion,
                 platform = Application.platform.ToString()

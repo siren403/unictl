@@ -58,7 +58,11 @@ namespace Unictl.TestRunner
             // Preflight checks
             var preflight = TestPreflight.Check(req);
             if (preflight.HasError)
-                return ErrorResult(preflight.ErrorKind, preflight.Message, BuildPreflightHint(preflight.ErrorKind));
+                return ErrorResult(
+                    preflight.ErrorKind,
+                    preflight.Message,
+                    BuildPreflightHint(preflight.ErrorKind),
+                    preflight.Context);
 
             // Build job
             var job = new TestJob
@@ -152,7 +156,7 @@ namespace Unictl.TestRunner
             return req;
         }
 
-        private static object ErrorResult(string kind, string message, string hintCommand)
+        private static object ErrorResult(string kind, string message, string hintCommand, object context = null)
         {
             return new
             {
@@ -162,6 +166,7 @@ namespace Unictl.TestRunner
                     kind,
                     message,
                     hint_command = hintCommand,
+                    context,
                 }
             };
         }

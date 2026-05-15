@@ -22,6 +22,9 @@ namespace Unictl
         internal static volatile bool IsCompiling;
         internal static volatile bool IsPaused;
         internal static volatile bool RunInBackground;
+        internal static volatile bool EnterPlayModeOptionsEnabled;
+        internal static string EnterPlayModeOptionsText = "None";
+        internal static volatile bool DisableDomainReload;
         internal static string UnityVersion = "unknown";
         internal static string Platform = "unknown";
         internal static string SessionId = Guid.NewGuid().ToString();
@@ -123,6 +126,7 @@ namespace Unictl
                         is_playing = IsPlaying,
                         is_compiling = IsCompiling,
                         is_paused = IsPaused,
+                        domain_reload = GetCachedDomainReloadStatus(),
                         run_in_background = RunInBackground,
                         unity_version = UnityVersion,
                         platform = Platform
@@ -254,8 +258,25 @@ namespace Unictl
             IsCompiling = EditorApplication.isCompiling;
             IsPaused = EditorApplication.isPaused;
             RunInBackground = Application.runInBackground;
+            EnterPlayModeOptionsEnabled = EditorSettings.enterPlayModeOptionsEnabled;
+            EnterPlayModeOptionsText = EditorSettings.enterPlayModeOptions.ToString();
+            DisableDomainReload =
+                EnterPlayModeOptionsEnabled &&
+                (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) != 0;
             UnityVersion = Application.unityVersion;
             Platform = Application.platform.ToString();
+        }
+
+        private static object GetCachedDomainReloadStatus()
+        {
+            return new
+            {
+                enter_play_mode_options_enabled = EnterPlayModeOptionsEnabled,
+                enter_play_mode_options = EnterPlayModeOptionsText,
+                disable_domain_reload = DisableDomainReload,
+                domain_reload_enabled = !DisableDomainReload,
+                domain_reload_disabled = DisableDomainReload
+            };
         }
 
         private static int FindFreePort()

@@ -387,6 +387,7 @@
       "notes": [
         "Unity native exit codes are NOT trusted directly; unictl remaps based on XML + stderr patterns.",
         "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via test_run tool. Poll Library/unictl-tests/<job-id>.json for progress.",
+        "For PlayMode editor lane, inspect domain reload state with command editor_control -p action=status; data.domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
         "Batchmode lane: --batch required or editor not running → headless Unity process."
       ]
     }
@@ -453,7 +454,8 @@
         "state",
         "progress_file",
         "editor_session_id",
-        "editor_pid"
+        "editor_pid",
+        "error.context.domain_reload"
       ],
       "emits_error_kinds": [
         "invalid_param",

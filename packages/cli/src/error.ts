@@ -106,7 +106,13 @@ export function errorEnvelope(fields: ErrorEnvelopeFields): {
  * prefer `errorEnvelope` + their own emit path so the structured fields
  * (recovery, related, context) survive.
  */
-export function errorExit(code: number, kind: string, message: string, hint?: string): never {
+export function errorExit(
+  code: number,
+  kind: string,
+  message: string,
+  hint?: string,
+  context?: Record<string, unknown> | null,
+): never {
   const hint_command = lookupHintCommand(kind);
   process.stderr.write(
     JSON.stringify({
@@ -116,6 +122,7 @@ export function errorExit(code: number, kind: string, message: string, hint?: st
         message,
         hint: hint ?? "",
         hint_command,
+        context: context ?? null,
       },
     }) + "\n"
   );

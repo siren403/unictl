@@ -10,6 +10,7 @@ namespace Unictl.TestRunner
     {
         public string ErrorKind;
         public string Message;
+        public object Context;
         public bool HasError => !string.IsNullOrEmpty(ErrorKind);
     }
 
@@ -47,9 +48,10 @@ namespace Unictl.TestRunner
                 if (EditorApplication.isPlayingOrWillChangePlaymode)
                     return Reject("editor_busy_playing", "Editor is in or transitioning to Play mode.");
 
-                if (!req.allow_reload_active && IsFullReloadActive())
+                if (!req.allow_reload_active && IsFullDomainReloadActive())
                     return Reject("editor_reload_active",
-                        "PlayMode tests with full domain reload are not supported in editor lane. Use --batch or set DisableDomainReload.");
+                        "PlayMode tests with full domain reload are not supported in editor lane. Use --batch or set DisableDomainReload.",
+                        new { domain_reload = GetDomainReloadStatus() });
 
                 if (!req.allow_unsaved_scenes && AnySceneDirty())
                     return Reject("editor_dirty_scene", "One or more open scenes have unsaved changes.");
@@ -61,10 +63,27 @@ namespace Unictl.TestRunner
             return new PreflightResult();
         }
 
-        private static bool IsFullReloadActive()
+        public static bool IsFullDomainReloadActive()
         {
             if (!EditorSettings.enterPlayModeOptionsEnabled) return true;
             return (EditorSettings.enterPlayModeOptions & EnterPlayModeOptions.DisableDomainReload) == 0;
+        }
+
+        public static object GetDomainReloadStatus()
+        {
+            var options = EditorSettings.enterPlayModeOptions;
+            var disableDomainReload =
+                EditorSettings.enterPlayModeOptionsEnabled &&
+                (options & EnterPlayModeOptions.DisableDomainReload) != 0;
+
+            return new
+            {
+                enter_play_mode_options_enabled = EditorSettings.enterPlayModeOptionsEnabled,
+                enter_play_mode_options = options.ToString(),
+                disable_domain_reload = disableDomainReload,
+                domain_reload_enabled = !disableDomainReload,
+                domain_reload_disabled = disableDomainReload
+            };
         }
 
         private static bool AnySceneDirty()
@@ -103,9 +122,9 @@ namespace Unictl.TestRunner
             }
         }
 
-        private static PreflightResult Reject(string kind, string message)
+        private static PreflightResult Reject(string kind, string message, object context = null)
         {
-            return new PreflightResult { ErrorKind = kind, Message = message };
+            return new PreflightResult { ErrorKind = kind, Message = message, Context = context };
         }
     }
 }

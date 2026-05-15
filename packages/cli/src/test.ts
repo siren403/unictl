@@ -332,7 +332,13 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
 
   if (!resp.ok) {
     const err = resp.error ?? {};
-    errorExit(2, err.kind ?? "ipc_error", err.message ?? "test_run IPC call rejected", err.hint_command ?? undefined);
+    errorExit(
+      2,
+      err.kind ?? "ipc_error",
+      err.message ?? "test_run IPC call rejected",
+      err.hint_command ?? undefined,
+      err.context ?? null,
+    );
   }
 
   const expectedSession: string = resp.editor_session_id;

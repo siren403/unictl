@@ -214,6 +214,18 @@ The editor evaluates these conditions before accepting a `test_run` job. Any rej
 | `results_path_unwritable` | The specified `--results` path is not writable. |
 | `test_already_running` | A `test_run` job is already active in this editor session. |
 
+For PlayMode editor-lane diagnostics, query the live editor status:
+
+```powershell
+unictl command editor_control -p action=status
+```
+
+The response includes `data.domain_reload`. `domain_reload_enabled=false`
+means `DisableDomainReload` is active and PlayMode editor-lane tests can run
+without `--allow-reload-active`. When preflight rejects with
+`editor_reload_active`, the same domain reload state is included in
+`error.context`.
+
 ### Lane Comparison
 
 | Item | Batchmode (`--batch`) | Editor Lane (default) |

@@ -13,6 +13,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Added live Domain Reload diagnostics to `editor_control action=status` and
+  `test_run` preflight errors, so `editor_reload_active` false positives can be
+  inspected from IPC instead of guessing from Unity UI state.
 - Fixed `input set --restart` so it uses the real `editor quit` lifecycle
   before editing `ProjectSettings.asset`. The previous path called a
   non-existent `editor_quit` IPC command and always fell back to
