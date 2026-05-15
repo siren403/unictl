@@ -1,6 +1,6 @@
 #!/usr/bin/env bun
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
-import { join, relative } from "path";
+import { join, relative, resolve } from "path";
 
 type Finding = {
   path: string;
@@ -9,7 +9,9 @@ type Finding = {
 };
 
 const repoRoot = join(import.meta.dir, "..");
-const packageRoot = join(repoRoot, "packages", "upm", "com.unictl.editor");
+const defaultPackageRoot = join(repoRoot, "packages", "upm", "com.unictl.editor");
+const rootArg = process.argv.find((arg) => arg.startsWith("--root="));
+const packageRoot = rootArg ? resolve(rootArg.slice("--root=".length)) : defaultPackageRoot;
 
 const placeholderGuids = new Set([
   "00000000000000000000000000000000",

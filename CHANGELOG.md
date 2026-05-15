@@ -13,6 +13,8 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Added regression coverage for the Unity `.meta` GUID release guard, including
+  duplicate GUIDs, known placeholder GUIDs, and sequential-looking sample GUIDs.
 - Added `execute_menu` menu discovery diagnostics: `action=search` and
   `action=list` can inspect Unity-version-specific menu paths, and failed
   synchronous execution now returns candidate suggestions. `unictl command`
