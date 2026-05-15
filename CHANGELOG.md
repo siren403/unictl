@@ -13,6 +13,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ### Fixed
 
+- Added `execute_menu` menu discovery diagnostics: `action=search` and
+  `action=list` can inspect Unity-version-specific menu paths, and failed
+  synchronous execution now returns candidate suggestions. `unictl command`
+  now exits non-zero when a builtin returns `success:false` / `ok:false`.
 - Added live Domain Reload diagnostics to `editor_control action=status` and
   `test_run` preflight errors, so `editor_reload_active` false positives can be
   inspected from IPC instead of guessing from Unity UI state.

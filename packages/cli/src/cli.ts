@@ -811,7 +811,16 @@ const commandCmd = defineCommand({
           `[deprecated] 'unictl command ${toolName}' has a v0.7 equivalent: ${suggestion}\n`,
         );
       }
-      output(await command(toolName, params, { project: args.project }));
+      const response = await command(toolName, params, { project: args.project });
+      output(response);
+      if (
+        response &&
+        typeof response === "object" &&
+        (((response as { success?: unknown }).success === false) ||
+          ((response as { ok?: unknown }).ok === false))
+      ) {
+        process.exit(1);
+      }
     } catch (error) {
       outputErrorAndExit(error);
     }
