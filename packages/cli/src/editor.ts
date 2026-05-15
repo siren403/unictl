@@ -230,10 +230,13 @@ export async function editorStatus(opts?: { project?: string }): Promise<EditorS
   }
 
   const lastState = livenessData?.last_state;
-  const phase = effectiveLivenessPhase(livenessData)
-    ?? (stateData?.is_compiling === true ? "compiling" : null)
+  const livenessPhase = effectiveLivenessPhase(livenessData);
+  const statePhase = (stateData?.is_compiling === true ? "compiling" : null)
     ?? (stateData?.is_playing === true ? "playing" : null)
     ?? (stateData ? "idle" : null);
+  const phase = livenessPhase === "unresponsive" && statePhase !== null
+    ? statePhase
+    : livenessPhase ?? statePhase;
 
   const isCompiling = boolOrNull(stateData?.is_compiling ?? lastState?.is_compiling);
   const isPlaying = boolOrNull(stateData?.is_playing ?? lastState?.is_playing);

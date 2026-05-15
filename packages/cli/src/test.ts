@@ -28,6 +28,12 @@ export type TestResult = {
   progress_file?: string;
 };
 
+type TestWaitResult = TestResult & {
+  state: string;
+  terminal: true;
+  success: boolean;
+};
+
 // ---------------------------------------------------------------------------
 // XML parsing — NUnit test-run format
 // ---------------------------------------------------------------------------
@@ -328,6 +334,152 @@ type EditorLaneArgs = {
   allowReloadActive: boolean;
 };
 
+type WaitForEditorTestJobArgs = {
+  projectRoot: string;
+  jobId: string;
+  progressPath?: string;
+  resultsFile?: string;
+  timeoutSec?: number;
+  expectedSession?: string;
+  expectedPid?: number;
+};
+
+function readProgressJson(progressPath: string): Record<string, any> | null {
+  try {
+    return JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, ""));
+  } catch {
+    return null;
+  }
+}
+
+async function waitForEditorTestJob(args: WaitForEditorTestJobArgs): Promise<TestWaitResult> {
+  const { projectRoot, jobId } = args;
+  const progressPath = resolve(args.progressPath ?? join(projectRoot, "Library", "unictl-tests", `${jobId}.json`));
+  const deadlineMs = args.timeoutSec && args.timeoutSec > 0 ? Date.now() + args.timeoutSec * 1000 : 0;
+  let expectedSession = args.expectedSession;
+  let expectedPid = args.expectedPid;
+
+  let interval = 250;
+  const maxInterval = 2000;
+  const HEARTBEAT_STALE_MS = 30_000;
+
+  while (true) {
+    await sleep(interval);
+    interval = Math.min(Math.floor(interval * 1.5), maxInterval);
+
+    if (expectedPid !== undefined && !isPidAlive(expectedPid)) {
+      errorExit(8, "editor_died", `Editor process (pid=${expectedPid}) exited unexpectedly during test run.`);
+    }
+
+    if (!existsSync(progressPath)) {
+      if (deadlineMs > 0 && Date.now() > deadlineMs) {
+        errorExit(6, "test_timeout", `CLI timeout after ${args.timeoutSec}s waiting for progress file.`, undefined, {
+          job_id: jobId,
+          progress_file: progressPath,
+        });
+      }
+      continue;
+    }
+
+    const job = readProgressJson(progressPath);
+    if (!job) continue;
+
+    expectedSession = expectedSession ?? job.editor_session_id;
+    expectedPid = expectedPid ?? job.editor_pid;
+
+    if (expectedPid !== undefined && !isPidAlive(expectedPid)) {
+      errorExit(8, "editor_died", `Editor process (pid=${expectedPid}) exited unexpectedly during test run.`);
+    }
+
+    if (job.editor_session_id && expectedSession && job.editor_session_id !== expectedSession) {
+      errorExit(8, "editor_session_changed", `Editor session changed mid-run (expected=${expectedSession}, actual=${job.editor_session_id}).`);
+    }
+
+    if (job.state === "running" && job.last_update_ms > 0) {
+      const sinceUpdate = Date.now() - job.last_update_ms;
+      if (sinceUpdate > HEARTBEAT_STALE_MS) {
+        errorExit(
+          8,
+          "test_heartbeat_stale",
+          `No progress update for ${Math.floor(sinceUpdate / 1000)}s (last_update_ms=${job.last_update_ms}).`,
+          undefined,
+          {
+            job_id: job.job_id ?? jobId,
+            progress_file: progressPath,
+            last_update_ms: job.last_update_ms,
+            stale_ms: sinceUpdate,
+            stale_after_ms: HEARTBEAT_STALE_MS,
+          },
+        );
+      }
+    }
+
+    if (deadlineMs > 0 && Date.now() > deadlineMs) {
+      errorExit(6, "test_timeout", `CLI timeout after ${args.timeoutSec}s.`, undefined, {
+        job_id: job.job_id ?? jobId,
+        progress_file: progressPath,
+        state: job.state,
+      });
+    }
+
+    switch (job.state) {
+      case "queued":
+      case "running":
+        continue;
+
+      case "finished": {
+        const total: number = job.total ?? 0;
+        const passed: number = job.passed ?? 0;
+        const failed: number = job.failed ?? 0;
+        const skipped: number = job.skipped ?? 0;
+        const durationMs: number =
+          job.run_finished_at_ms && job.run_started_at_ms
+            ? job.run_finished_at_ms - job.run_started_at_ms
+            : 0;
+
+        if (failed > 0) {
+          errorExit(1, "tests_failed", `${failed} test(s) failed (failed=${failed}, total=${total})`);
+        }
+
+        return {
+          ok: true,
+          lane: "editor",
+          platform: job.platform ?? "editmode",
+          total,
+          passed,
+          failed,
+          skipped,
+          results_file: job.results_path ?? args.resultsFile ?? "",
+          job_id: job.job_id ?? jobId,
+          progress_file: progressPath,
+          log_file: null as unknown as string,
+          duration_ms: durationMs,
+          state: "finished",
+          terminal: true,
+          success: true,
+        };
+      }
+
+      case "failed":
+        errorExit(
+          8,
+          (job.error_kind as string) ?? "unknown_test_failure",
+          (job.error_message as string) ?? "Test run failed",
+          undefined,
+          {
+            job_id: job.job_id ?? jobId,
+            progress_file: progressPath,
+            state: job.state,
+          },
+        );
+        break;
+
+      default:
+        continue;
+    }
+  }
+}
+
 async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
   const { projectRoot, platform, resultsFile, filter, timeoutSec, allowUnsavedScenes, allowReloadActive } = args;
   assertStableResultsPath(projectRoot, resultsFile);
@@ -371,111 +523,94 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
   const expectedPid: number = resp.editor_pid;
   const progressPath = resolve(projectRoot, resp.progress_file);
 
-  let interval = 250;
-  const maxInterval = 2000;
-  const HEARTBEAT_STALE_MS = 30_000;
-
-  while (true) {
-    await sleep(interval);
-    interval = Math.min(Math.floor(interval * 1.5), maxInterval);
-
-    // editor liveness check
-    if (!isPidAlive(expectedPid)) {
-      errorExit(8, "editor_died", `Editor process (pid=${expectedPid}) exited unexpectedly during test run.`);
-    }
-
-    if (!existsSync(progressPath)) continue;
-
-    let job: Record<string, any>;
-    try {
-      job = JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, ""));
-    } catch {
-      continue; // partial read; retry next iteration
-    }
-
-    // session change detection (editor restarted)
-    if (job.editor_session_id && job.editor_session_id !== expectedSession) {
-      errorExit(8, "editor_session_changed", `Editor session changed mid-run (expected=${expectedSession}, actual=${job.editor_session_id}).`);
-    }
-
-    // heartbeat stale (only check once state=running to avoid false positives on queued)
-    if (job.state === "running" && job.last_update_ms > 0) {
-      const sinceUpdate = Date.now() - job.last_update_ms;
-      if (sinceUpdate > HEARTBEAT_STALE_MS) {
-        errorExit(
-          8,
-          "test_heartbeat_stale",
-          `No progress update for ${Math.floor(sinceUpdate / 1000)}s (last_update_ms=${job.last_update_ms}).`,
-          undefined,
-          {
-            job_id: job.job_id ?? jobId,
-            progress_file: progressPath,
-            last_update_ms: job.last_update_ms,
-            stale_ms: sinceUpdate,
-            stale_after_ms: HEARTBEAT_STALE_MS,
-          },
-        );
-      }
-    }
-
-    // CLI-side deadline
-    if (deadlineMs > 0 && Date.now() > deadlineMs) {
-      errorExit(6, "test_timeout", `CLI timeout after ${timeoutSec}s.`);
-    }
-
-    switch (job.state) {
-      case "queued":
-      case "running":
-        continue;
-
-      case "finished": {
-        const total: number = job.total ?? 0;
-        const passed: number = job.passed ?? 0;
-        const failed: number = job.failed ?? 0;
-        const skipped: number = job.skipped ?? 0;
-        const durationMs: number =
-          job.run_finished_at_ms && job.run_started_at_ms
-            ? job.run_finished_at_ms - job.run_started_at_ms
-            : 0;
-
-        if (failed > 0) {
-          errorExit(1, "tests_failed", `${failed} test(s) failed (failed=${failed}, total=${total})`);
-        }
-
-        return {
-          ok: true,
-          lane: "editor",
-          platform,
-          total,
-          passed,
-          failed,
-          skipped,
-          results_file: job.results_path ?? resolvedResults,
-          job_id: job.job_id,
-          progress_file: progressPath,
-          log_file: null as unknown as string,
-          duration_ms: durationMs,
-        };
-      }
-
-      case "failed":
-        errorExit(
-          8,
-          (job.error_kind as string) ?? "unknown_test_failure",
-          (job.error_message as string) ?? "Test run failed",
-        );
-        break;
-
-      default:
-        // unknown state — keep polling
-        continue;
-    }
-  }
+  const waited = await waitForEditorTestJob({
+    projectRoot,
+    jobId,
+    progressPath,
+    resultsFile: resolvedResults,
+    timeoutSec,
+    expectedSession,
+    expectedPid,
+  });
+  return {
+    ok: waited.ok,
+    lane: waited.lane,
+    platform: waited.platform,
+    total: waited.total,
+    passed: waited.passed,
+    failed: waited.failed,
+    skipped: waited.skipped,
+    results_file: waited.results_file,
+    job_id: waited.job_id,
+    progress_file: waited.progress_file,
+    log_file: waited.log_file,
+    duration_ms: waited.duration_ms,
+  };
 }
 
 // ---------------------------------------------------------------------------
 // test subcommand
 // ---------------------------------------------------------------------------
+
+export async function runTestWaitCli(rawArgs: string[]): Promise<void> {
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    process.stdout.write(`Wait for an existing editor-lane test_run job; does not start tests.
+
+USAGE
+  unictl test wait <job-id> [--project <path>] [--timeout 2m] [--progress-file <path>]
+
+Prefer 'unictl test' unless you already have a job_id from raw 'unictl command test_run'.
+`);
+    process.exit(0);
+  }
+
+  let jobId = "";
+  let project: string | undefined;
+  let timeout: string | undefined;
+  let progressFile: string | undefined;
+
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+    if (arg === "--project") {
+      project = rawArgs[++i];
+    } else if (arg === "--timeout") {
+      timeout = rawArgs[++i];
+    } else if (arg === "--progressFile" || arg === "--progress-file") {
+      progressFile = rawArgs[++i];
+    } else if (!arg.startsWith("-") && !jobId) {
+      jobId = arg;
+    }
+  }
+
+  if (!jobId) {
+    errorExit(2, "invalid_param", "<job-id> is required", "unictl test wait <job-id> --project <path>");
+  }
+
+  let timeoutSec: number | undefined;
+  if (timeout !== undefined) {
+    const parsed = parseDuration(timeout);
+    if (Number.isNaN(parsed)) {
+      errorExit(
+        2,
+        "invalid_param",
+        `Cannot parse --timeout '${timeout}'. Expected forms: 30s, 2m, 1h, bare integer, or 0.`,
+        "unictl test wait <job-id> --timeout 2m",
+      );
+    }
+    timeoutSec = parsed;
+  }
+
+  const { projectRoot } = getProjectPaths(project);
+  const result = await waitForEditorTestJob({
+    projectRoot,
+    jobId,
+    progressPath: progressFile,
+    timeoutSec: timeoutSec && timeoutSec > 0 ? timeoutSec : undefined,
+  });
+
+  process.stdout.write(JSON.stringify(result) + "\n");
+  process.exit(0);
+}
 
 export const testCmd = defineCommand({
   meta: {

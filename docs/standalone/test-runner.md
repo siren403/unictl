@@ -215,6 +215,19 @@ If the editor is not running, unictl auto-routes to the batch lane.
 2. CLI polls `Library/unictl-tests/<job-id>.json` for progress (250 ms initial, up to 2 s backoff).
 3. Heartbeat staleness is detected at 30 s; if the editor PID dies or the session ID changes, the CLI exits with the appropriate error kind.
 
+Agents should prefer the first-class `unictl test` command. If a raw
+`unictl command test_run` job has already been started, use the companion wait
+command instead of grepping the progress file:
+
+```powershell
+unictl test wait <job-id> --project <path> --timeout 2m
+```
+
+`test wait` does not start tests. It parses the progress file as JSON, strips a
+UTF-8 BOM when present, validates editor PID/session continuity, applies the
+same stale heartbeat and timeout checks as `unictl test`, and emits a terminal
+JSON envelope.
+
 ### New Flags
 
 | Flag | Description |
@@ -240,10 +253,10 @@ The editor evaluates these conditions before accepting a `test_run` job. Any rej
 For PlayMode editor-lane diagnostics, query the live editor status:
 
 ```powershell
-unictl command editor_control -p action=status
+unictl editor status
 ```
 
-The response includes `data.domain_reload`. `domain_reload_enabled=false`
+The response includes `domain_reload`. `domain_reload_enabled=false`
 means `DisableDomainReload` is active and PlayMode editor-lane tests can run
 without `--allow-reload-active`. When preflight rejects with
 `editor_reload_active`, the same domain reload state is included in

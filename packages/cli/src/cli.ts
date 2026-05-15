@@ -7,7 +7,7 @@ import { formatHelpJson } from "./help-json";
 import { lookupHintCommand } from "./error";
 import { buildCmd } from "./build";
 import { runCompile } from "./compile";
-import { testCmd } from "./test";
+import { runTestWaitCli, testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
 import { schemaAll, lookupCommandSchema } from "./schema";
@@ -404,6 +404,8 @@ function normalizeKnownFlags(args: string[]): string[] {
         return "--packageRef";
       case "--skip-precompile":
         return "--skipPrecompile";
+      case "--progress-file":
+        return "--progressFile";
       default:
         return arg;
     }
@@ -1141,6 +1143,10 @@ if (rawArgv.includes("--describe")) {
       process.exit(0);
     }
   }
+}
+
+if (rawArgv[0] === "test" && rawArgv[1] === "wait") {
+  await runTestWaitCli(normalizeKnownFlags(rawArgv.slice(2)));
 }
 
 runMain(main, { rawArgs: normalizeKnownFlags(rawArgv) });

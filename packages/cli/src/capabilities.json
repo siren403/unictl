@@ -299,6 +299,20 @@
         "--allow-reload-active"
       ],
       "help": "unictl test --help",
+      "schema": "unictl schema test",
+      "subcommands": [
+        {
+          "name": "wait",
+          "description": "Wait for an existing editor-lane test_run job; does not start tests.",
+          "key_flags": [
+            "--project",
+            "--timeout",
+            "--progress-file"
+          ],
+          "help": "unictl test wait --help",
+          "schema": "unictl schema test.wait"
+        }
+      ],
       "exit_codes": [
         {
           "code": 0,
@@ -390,6 +404,7 @@
         "Successful output includes lane=batch|editor. Editor lane also includes job_id and progress_file.",
         "--timeout accepts 30s, 2m, 1h, bare seconds, or 0 unbounded.",
         "Editor lane (v0.6.0+): --batch omitted + editor running → IPC via internal test_run tool; prefer this first-class command over raw command test_run.",
+        "If you already started raw command test_run, use unictl test wait <job-id>; do not grep the progress file text.",
         "For PlayMode editor-lane diagnostics, inspect domain reload state with unictl editor status; domain_reload.domain_reload_enabled=false means Disable Domain Reload is active.",
         "Batchmode lane: --batch required or editor not running → headless Unity process using Unictl.BatchTestRunner.RunFromCommandLine."
       ]
@@ -401,6 +416,7 @@
       "description": "Internal editor-lane test tool. Prefer unictl test; raw callers must parse the progress file as JSON, not grep text.",
       "surface": "internal",
       "preferred_command": "unictl test",
+      "completion_command": "unictl test wait <job-id>",
       "parameters": [
         "platform",
         "assembly",
