@@ -105,6 +105,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
       { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and block until editor returns to idle" },
       { cmd: "unictl editor compile --no-json", intent: "human-readable output" },
       { cmd: "unictl editor compile --wait idle", intent: "if error.kind=editor_compile_error_state, fix error.context.compile_errors before retrying editor workflows" },
+      { cmd: "unictl editor compile --wait idle", intent: "if error.kind=unictl_upm_too_old or unictl_cli_too_old, follow error.context.recommended_commands before retrying" },
     ],
     exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.refresh", "editor.status", "wait"],
@@ -429,6 +430,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     examples: [
       { cmd: "unictl command list", intent: "enumerate all [UnictlTool] registrations at runtime (builtin + consumer-defined)" },
       { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the project-scoped editor log; if the current editor was not started through unictl, inspect data.requires_editor_restart" },
+      { cmd: "unictl command editor_control -p action=status", intent: "diagnose editor and CLI/UPM version compatibility without triggering a workflow" },
       { cmd: "unictl command editor_log -p action=tail --format text", intent: "print raw log lines for shell pipelines such as grep, tail, or wc" },
       { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
       { cmd: "unictl command my_save_inspector -p target=Player", intent: "invoke a consumer-defined [UnictlTool]" },

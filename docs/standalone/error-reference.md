@@ -31,6 +31,12 @@ This document is auto-generated from `packages/cli/src/error-registry.json`.
 | `project_not_detected` | doctor | 2 | Run unictl commands from within a Unity project directory, or pass --project <path>. |
 | `compile_failed` | compile | 1 | Unity compile errors found. Check errors[] in output for details. |
 | `editor_compile_error_state` | cli, editor_lane | 1 | Unity has C# compile errors, so editor-side unictl workflows may be unreliable until those errors are fixed. |
+| `unictl_cli_too_old` | cli, editor_lane | 1 | The Unity UPM package is newer than the unictl CLI. Update the CLI before retrying editor-side workflows. |
+| `unictl_cli_version_unknown` | editor_lane | 1 | The Unity UPM package could not see a CLI version. Update unictl CLI before retrying editor-side workflows. |
+| `unictl_cli_version_invalid` | editor_lane | 1 | The Unity UPM package could not parse the CLI version. Update unictl CLI before retrying editor-side workflows. |
+| `unictl_upm_too_old` | cli | 1 | The unictl CLI is newer than the Unity UPM package. Update com.unictl.editor in the Unity project. |
+| `unictl_upm_version_unknown` | cli | 1 | The Unity UPM package did not report version metadata. Update com.unictl.editor before running editor-side workflows. |
+| `unictl_version_invalid` | cli | 1 | The CLI and Unity UPM package versions could not be compared. Update both sides to matching releases. |
 | `job_not_found` | build_runner | 3 | No progress file for that job_id. Verify the id returned by build_project, or the job may have been pruned (retention policy keeps last 10). |
 | `progress_read_failed` | build_runner | 125 | Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds. |
 | `not_yet_implemented` | build_runner | 125 | this capability is scaffolded in P1; wire-up lands with later phases |

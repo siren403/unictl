@@ -10,6 +10,9 @@ the step order, and recovery procedures for partial-release failures.
 - `git status` contains only changes intended for this release. The release
   script stages the full repo with `git add -A` so the release commit, npm
   publish, and git tag refer to the same source state.
+- Version targets are synchronized through `scripts/lib/release.ts`, including
+  npm package metadata, integration metadata, `capabilities.json`, and the UPM
+  C# `UnictlVersion.PackageVersion` constant.
 
 ## The 5-Step Release Order
 
@@ -53,6 +56,10 @@ working tree but the git tag omitted source, validation, or documentation files.
 Before running a release, move unrelated local experiments out of the worktree
 or commit them separately.
 
+Version sync is release-critical. `scripts/version/drift-check.ts` must pass
+after version fan-out and before assemble/publish. If a new version field is
+added, update `scripts/lib/release.ts` rather than adding a second target list.
+
 ## Flags
 
 | Flag | Behavior |
@@ -68,7 +75,7 @@ or commit them separately.
 ```bash
 bun run release 0.4.0 --dry-run
 # After test, revert version bumps:
-git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json integrations/codex/plugin.config.json integrations/claude-code/support-pack.json
+git checkout -- package.json packages/cli/package.json packages/upm/com.unictl.editor/package.json packages/cli/src/capabilities.json packages/upm/com.unictl.editor/Editor/Unictl/Internal/UnictlVersion.cs integrations/codex/plugin.config.json integrations/claude-code/support-pack.json
 ```
 
 ## Partial-Release Recovery

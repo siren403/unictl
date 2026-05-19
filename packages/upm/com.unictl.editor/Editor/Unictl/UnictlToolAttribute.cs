@@ -1,4 +1,5 @@
 using System;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 
 namespace Unictl
@@ -44,6 +45,8 @@ namespace Unictl
         public bool success = false;
         public string message;
         public object data;
+        [JsonProperty(NullValueHandling = NullValueHandling.Ignore)]
+        public object error;
 
         public ErrorResponse(string message, object data = null)
         {

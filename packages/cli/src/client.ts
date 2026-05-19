@@ -5,6 +5,12 @@ import {
   type EndpointDescriptor,
 } from "./socket";
 import { createIpcRequestMeta } from "./ipc-meta";
+import {
+  buildVersionMismatchError,
+  compatibilityStatus,
+  extractUpmVersion,
+  isVersionSafeCommand,
+} from "./version-compatibility";
 
 function describeEndpoint(endpoint: EndpointDescriptor): string {
   if (endpoint.transport === "unix") {
@@ -53,6 +59,27 @@ async function requestJson(
 }
 
 export async function command(
+  cmd: string,
+  params?: Record<string, unknown>,
+  opts?: { project?: string }
+): Promise<unknown> {
+  if (!isVersionSafeCommand(cmd, params)) {
+    const statusResponse = await commandRaw("editor_control", { action: "status" }, opts);
+    const upmVersion = extractUpmVersion(statusResponse);
+    const status = compatibilityStatus(upmVersion);
+    if (status !== "compatible") {
+      return buildVersionMismatchError(status, {
+        tool: cmd,
+        action: typeof params?.action === "string" ? params.action : undefined,
+        upmVersion,
+      });
+    }
+  }
+
+  return commandRaw(cmd, params, opts);
+}
+
+async function commandRaw(
   cmd: string,
   params?: Record<string, unknown>,
   opts?: { project?: string }

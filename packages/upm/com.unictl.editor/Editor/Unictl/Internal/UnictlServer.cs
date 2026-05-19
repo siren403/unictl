@@ -5,6 +5,7 @@ using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Unictl.Internal;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
@@ -129,7 +130,8 @@ namespace Unictl
                         domain_reload = GetCachedDomainReloadStatus(),
                         run_in_background = RunInBackground,
                         unity_version = UnityVersion,
-                        platform = Platform
+                        platform = Platform,
+                        unictl = VersionCompatibility.BuildDiagnostic(obj["params"] as JObject)
                     }));
                     return Marshal.StringToCoTaskMemUTF8(statusJson);
                 }

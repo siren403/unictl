@@ -63,6 +63,12 @@
     { "kind": "editor_reload_active",             "code": 20512,  "hex": "0x5020" },
     { "kind": "editor_unresponsive",              "code": 20513,  "hex": "0x5021" },
     { "kind": "editor_compile_error_state",        "code": 20514,  "hex": "0x5022" },
+    { "kind": "unictl_cli_too_old",                "code": 20515,  "hex": "0x5023" },
+    { "kind": "unictl_cli_version_unknown",        "code": 20516,  "hex": "0x5024" },
+    { "kind": "unictl_cli_version_invalid",        "code": 20517,  "hex": "0x5025" },
+    { "kind": "unictl_upm_too_old",                "code": 20518,  "hex": "0x5026" },
+    { "kind": "unictl_upm_version_unknown",        "code": 20519,  "hex": "0x5027" },
+    { "kind": "unictl_version_invalid",            "code": 20520,  "hex": "0x5028" },
 
     { "kind": "project_locked",                   "code": 24576,  "hex": "0x6000" },
     { "kind": "progress_read_failed",             "code": 24577,  "hex": "0x6001" },

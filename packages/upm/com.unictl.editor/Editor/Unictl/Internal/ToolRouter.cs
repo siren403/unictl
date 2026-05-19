@@ -4,6 +4,7 @@ using System.Linq;
 using System.Reflection;
 using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using Unictl.Internal;
 using UnityEngine;
 
 namespace Unictl
@@ -19,6 +20,7 @@ namespace Unictl
                 return JsonConvert.SerializeObject(new
                 {
                     tools = GetToolSchemas(),
+                    unictl = VersionCompatibility.BuildDiagnostic(parameters),
                     extensibility = new
                     {
                         hint = "Add custom tools by creating a static C# class with [UnictlTool] attribute and a static HandleCommand(JObject) method.",
@@ -33,6 +35,10 @@ namespace Unictl
 
             try
             {
+                var versionError = VersionCompatibility.Check(command, parameters);
+                if (versionError != null)
+                    return JsonConvert.SerializeObject(versionError);
+
                 var result = handler.Invoke(null, new object[] { parameters ?? new JObject() });
                 return JsonConvert.SerializeObject(result);
             }

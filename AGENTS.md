@@ -47,10 +47,16 @@ tools/unictl/
 Rules:
 
 - All versioned metadata is synchronized by `scripts/release.ts`.
+- Version fan-out and drift checks use `scripts/lib/release.ts` as the shared
+  target list. If adding any new version field or constant, add it there first
+  so `scripts/version/fanout.ts`, `scripts/version/drift-check.ts`, release,
+  and assemble validation stay aligned.
 - `scripts/release.ts` stages the full repository with `git add -A` for the
   release commit. Before releasing, keep only changes intended for that release
   in the worktree; move unrelated experiments out or commit them separately.
 - Do not manually edit release version fields unless deliberately debugging the release script.
+- Do not manually edit `UnictlVersion.PackageVersion` except when deliberately
+  debugging version mismatch behavior; release/version fan-out owns it.
 - Keep `[Unreleased]` in `CHANGELOG.md` populated before release.
 - Run `mise run release:dry-run -- <version>` before any real publish.
 - Real release command is `mise run release -- <version>` and performs version commit, npm publish, git push, tag, and tag push.

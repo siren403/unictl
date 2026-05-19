@@ -1,12 +1,12 @@
 import {
   getVersionTargets,
   readVersion,
-  syncVersionField,
+  syncVersionTarget,
 } from "../lib/release";
 
 const version = readVersion();
 const updates = getVersionTargets().map((target) => {
-  const result = syncVersionField(target.path, version);
+  const result = syncVersionTarget(target, version);
   return {
     name: target.name,
     path: target.path,

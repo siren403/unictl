@@ -31,36 +31,16 @@
 
 import { readFileSync, writeFileSync, existsSync } from "fs";
 import { join } from "path";
+import { getVersionTargets, syncVersionTarget } from "./lib/release";
 
 const ROOT = join(import.meta.dir, "..");
-
-// All package.json files that share the unictl version.
-// Listed in the order we update them; release.ts always syncs them.
-const VERSIONED_PACKAGES = [
-  join(ROOT, "package.json"),                                      // repo meta
-  join(ROOT, "packages/cli/package.json"),                         // npm-published CLI
-  join(ROOT, "packages/upm/com.unictl.editor/package.json"),       // Unity UPM
-];
-
-// Integration metadata files also version-matched at release.
-const VERSIONED_INTEGRATIONS = [
-  join(ROOT, "integrations/codex/plugin.config.json"),
-  join(ROOT, "integrations/claude-code/support-pack.json"),
-];
-
-// CLI source files with version fields that must stay in sync.
-const VERSIONED_CLI = [
-  join(ROOT, "packages/cli/src/capabilities.json"),
-];
-
-const ALL_VERSIONED = [...VERSIONED_PACKAGES, ...VERSIONED_INTEGRATIONS, ...VERSIONED_CLI];
 
 const CLI_PACKAGE_DIR = join(ROOT, "packages/cli");
 const CHANGELOG_PATH = join(ROOT, "CHANGELOG.md");
 const ROADMAP_PATH   = join(ROOT, "docs/standalone/ROADMAP.md");
 
 function readVersion(): string {
-  const pkg = JSON.parse(readFileSync(VERSIONED_PACKAGES[0], "utf-8"));
+  const pkg = JSON.parse(readFileSync(join(ROOT, "package.json"), "utf-8"));
   return pkg.version;
 }
 
@@ -77,14 +57,8 @@ function bumpVersion(current: string, type: string): string {
 }
 
 function updatePackageJsons(version: string): void {
-  for (const path of ALL_VERSIONED) {
-    const pkg = JSON.parse(readFileSync(path, "utf-8"));
-    if ("unictl_version" in pkg) {
-      pkg.unictl_version = version;
-    } else {
-      pkg.version = version;
-    }
-    writeFileSync(path, JSON.stringify(pkg, null, 2) + "\n");
+  for (const target of getVersionTargets()) {
+    syncVersionTarget(target, version);
   }
 }
 
@@ -240,6 +214,7 @@ function runAssemble(version: string, outputDir?: string): void {
 
 function runValidationScripts(): void {
   console.log("  Running validation scripts");
+  run(["bun", "run", "scripts/version/drift-check.ts"]);
   run(["bun", "run", "scripts/check-error-registry.ts"]);
   run(["bun", "run", "scripts/check-unity-meta-guids.ts"]);
 }

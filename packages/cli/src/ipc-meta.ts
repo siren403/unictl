@@ -1,6 +1,8 @@
 import type { EndpointDescriptor } from "./socket";
+import { getCliPackageMeta } from "./meta";
 
 export type IpcRequestMeta = {
+  cli_version: string;
   client_pid: number;
   cli_args: string[];
   cwd: string;
@@ -22,6 +24,7 @@ export function createIpcRequestMeta(
   requestId: string,
 ): IpcRequestMeta {
   return {
+    cli_version: getCliPackageMeta().version,
     client_pid: process.pid,
     cli_args: process.argv.slice(),
     cwd: process.cwd(),

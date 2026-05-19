@@ -41,6 +41,13 @@ not be the richer path for common agent workflows:
   as the primary cause. Inspect `error.context.compile_errors`, fix those
   errors first, and do not infer native DLL, UPM import, or IPC transport
   failure until compile errors are gone.
+- Unsafe editor-side workflows require CLI/UPM version compatibility. If
+  `error.kind=unictl_cli_too_old`, update the CLI before retrying. If
+  `error.kind=unictl_upm_too_old` or `unictl_upm_version_unknown`, run the
+  returned `error.context.recommended_commands` such as
+  `unictl init --version <cli_version> --force` and `unictl editor restart`.
+  Do not infer DLL, package import, or IPC transport failure until version
+  mismatch errors are cleared.
 - If a raw async job is exposed, provide a first-class wait/status companion
   before documenting progress-file parsing as an agent workflow.
 

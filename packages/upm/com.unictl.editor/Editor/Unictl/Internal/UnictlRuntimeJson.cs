@@ -232,16 +232,7 @@ namespace Unictl
 
         private static string ProbePackageVersion()
         {
-            try
-            {
-                var assembly = Assembly.GetExecutingAssembly();
-                var info = PackageInfo.FindForAssembly(assembly);
-                return info?.version ?? "unknown";
-            }
-            catch
-            {
-                return "unknown";
-            }
+            return Internal.UnictlVersion.PackageVersion;
         }
 
         private static long MonotonicNowMs()

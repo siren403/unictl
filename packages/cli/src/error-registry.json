@@ -194,6 +194,54 @@
       "since_version": "0.7.10"
     },
     {
+      "kind": "unictl_cli_too_old",
+      "emitted_from": ["cli", "editor_lane"],
+      "exit_code": 1,
+      "hint_text": "The Unity UPM package is newer than the unictl CLI. Update the CLI before retrying editor-side workflows.",
+      "hint_command": "bunx unictl@<upm_version> <same command>",
+      "since_version": "0.7.10"
+    },
+    {
+      "kind": "unictl_cli_version_unknown",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 1,
+      "hint_text": "The Unity UPM package could not see a CLI version. Update unictl CLI before retrying editor-side workflows.",
+      "hint_command": "bunx unictl@<upm_version> <same command>",
+      "since_version": "0.7.10"
+    },
+    {
+      "kind": "unictl_cli_version_invalid",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 1,
+      "hint_text": "The Unity UPM package could not parse the CLI version. Update unictl CLI before retrying editor-side workflows.",
+      "hint_command": "bunx unictl@<upm_version> <same command>",
+      "since_version": "0.7.10"
+    },
+    {
+      "kind": "unictl_upm_too_old",
+      "emitted_from": ["cli"],
+      "exit_code": 1,
+      "hint_text": "The unictl CLI is newer than the Unity UPM package. Update com.unictl.editor in the Unity project.",
+      "hint_command": "unictl init --version <cli_version> --force",
+      "since_version": "0.7.10"
+    },
+    {
+      "kind": "unictl_upm_version_unknown",
+      "emitted_from": ["cli"],
+      "exit_code": 1,
+      "hint_text": "The Unity UPM package did not report version metadata. Update com.unictl.editor before running editor-side workflows.",
+      "hint_command": "unictl init --version <cli_version> --force",
+      "since_version": "0.7.10"
+    },
+    {
+      "kind": "unictl_version_invalid",
+      "emitted_from": ["cli"],
+      "exit_code": 1,
+      "hint_text": "The CLI and Unity UPM package versions could not be compared. Update both sides to matching releases.",
+      "hint_command": "unictl init --version <cli_version> --force",
+      "since_version": "0.7.10"
+    },
+    {
       "kind": "job_not_found",
       "emitted_from": ["build_runner"],
       "exit_code": 3,

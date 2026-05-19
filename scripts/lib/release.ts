@@ -15,6 +15,7 @@ import { fileURLToPath } from "url";
 export type VersionTarget = {
   name: string;
   path: string;
+  kind: "json-version" | "json-unictl-version" | "csharp-const";
 };
 
 type VersionedJson = {
@@ -49,26 +50,62 @@ export function writeJsonFile(path: string, value: unknown): void {
 
 export function getVersionTargets(): VersionTarget[] {
   return [
-    { name: "root-package",        path: join(repoRoot, "package.json") },
-    { name: "cli-package",         path: join(repoRoot, "packages", "cli", "package.json") },
-    { name: "upm-editor-package",  path: join(repoRoot, "packages", "upm", "com.unictl.editor", "package.json") },
-    { name: "codex-plugin-config", path: join(repoRoot, "integrations", "codex", "plugin.config.json") },
-    { name: "claude-support-config", path: join(repoRoot, "integrations", "claude-code", "support-pack.json") },
+    { name: "root-package",          path: join(repoRoot, "package.json"), kind: "json-version" },
+    { name: "cli-package",           path: join(repoRoot, "packages", "cli", "package.json"), kind: "json-version" },
+    { name: "upm-editor-package",    path: join(repoRoot, "packages", "upm", "com.unictl.editor", "package.json"), kind: "json-version" },
+    { name: "codex-plugin-config",   path: join(repoRoot, "integrations", "codex", "plugin.config.json"), kind: "json-version" },
+    { name: "claude-support-config", path: join(repoRoot, "integrations", "claude-code", "support-pack.json"), kind: "json-version" },
+    { name: "cli-capabilities",      path: join(repoRoot, "packages", "cli", "src", "capabilities.json"), kind: "json-unictl-version" },
+    { name: "upm-version-const",     path: join(repoRoot, "packages", "upm", "com.unictl.editor", "Editor", "Unictl", "Internal", "UnictlVersion.cs"), kind: "csharp-const" },
   ];
 }
 
-export function syncVersionField(path: string, version: string): { changed: boolean; previous: string | null } {
-  const json = readJsonFile<VersionedJson>(path);
-  const previous = typeof json.version === "string" ? json.version : null;
+function readCSharpPackageVersion(path: string): string | null {
+  const content = readFileSync(path, "utf-8");
+  return content.match(/PackageVersion\s*=\s*"([^"]+)"/)?.[1] ?? null;
+}
+
+function writeCSharpPackageVersion(path: string, version: string): void {
+  const content = readFileSync(path, "utf-8");
+  const updated = content.replace(
+    /(PackageVersion\s*=\s*")[^"]+(")/,
+    `$1${version}$2`,
+  );
+  if (updated === content) {
+    throw new Error(`Could not update PackageVersion const in ${path}`);
+  }
+  writeFileSync(path, updated, "utf-8");
+}
+
+function readVersionTarget(target: VersionTarget): string | null {
+  if (target.kind === "csharp-const") return readCSharpPackageVersion(target.path);
+  const json = readJsonFile<VersionedJson>(target.path);
+  const field = target.kind === "json-unictl-version" ? "unictl_version" : "version";
+  const value = json[field];
+  return typeof value === "string" ? value : null;
+}
+
+export function syncVersionTarget(target: VersionTarget, version: string): { changed: boolean; previous: string | null } {
+  const previous = readVersionTarget(target);
   if (previous === version) {
     return { changed: false, previous };
   }
 
-  writeJsonFile(path, {
-    ...json,
-    version,
-  });
+  if (target.kind === "csharp-const") {
+    writeCSharpPackageVersion(target.path, version);
+  } else {
+    const json = readJsonFile<VersionedJson>(target.path);
+    const field = target.kind === "json-unictl-version" ? "unictl_version" : "version";
+    writeJsonFile(target.path, {
+      ...json,
+      [field]: version,
+    });
+  }
   return { changed: true, previous };
+}
+
+export function syncVersionField(path: string, version: string): { changed: boolean; previous: string | null } {
+  return syncVersionTarget({ name: path, path, kind: "json-version" }, version);
 }
 
 export function collectVersionDrift(version: string): Array<{
@@ -79,8 +116,7 @@ export function collectVersionDrift(version: string): Array<{
 }> {
   return getVersionTargets()
     .map((target) => {
-      const json = readJsonFile<VersionedJson>(target.path);
-      const actual = typeof json.version === "string" ? json.version : null;
+      const actual = readVersionTarget(target);
       return {
         name: target.name,
         path: target.path,

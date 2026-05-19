@@ -1,4 +1,5 @@
 using Newtonsoft.Json.Linq;
+using Unictl.Internal;
 
 namespace Unictl
 {
@@ -11,7 +12,8 @@ namespace Unictl
             {
                 unity_version = UnictlServer.UnityVersion,
                 is_playing = UnictlServer.IsPlaying,
-                platform = UnictlServer.Platform
+                platform = UnictlServer.Platform,
+                unictl = VersionCompatibility.BuildDiagnostic(parameters)
             });
         }
     }

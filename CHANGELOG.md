@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+
+- Added CLI/UPM version compatibility diagnostics and workflow guards. Unsafe
+  editor-side workflows now fail with machine-readable remediation when the CLI
+  is older than the Unity package, the Unity package is older than the CLI, or
+  version metadata is missing.
+
 ### Fixed
 
 - Editor-side `compile`, `refresh`, `wait`, and editor-lane `test` failures now

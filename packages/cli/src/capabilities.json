@@ -36,7 +36,8 @@
         "Default output is JSON.",
         "For editor_log only, --format text emits data.lines, data.matches[].text, or errors groups as raw text for shell pipelines.",
         "editor_log requires the current Unity session to have been started through unictl editor open/restart; stale or missing project logs return data.requires_editor_restart=true.",
-        "If editor-side workflows fail while editor_log action=errors reports C# errors, callers should branch on error.kind=editor_compile_error_state and fix compile errors before retrying compile/refresh/wait/test workflows."
+        "If editor-side workflows fail while editor_log action=errors reports C# errors, callers should branch on error.kind=editor_compile_error_state and fix compile errors before retrying compile/refresh/wait/test workflows.",
+        "Unsafe editor-side workflows require CLI and Unity UPM package version compatibility. Branch on unictl_cli_too_old to update the CLI, or unictl_upm_too_old/unictl_upm_version_unknown to run unictl init --version <cli_version> --force and restart the editor."
       ]
     },
     {

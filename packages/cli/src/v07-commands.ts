@@ -128,6 +128,10 @@ function isBusyKind(kind: string | null): boolean {
     kind === "editor_reload_active";
 }
 
+function isVersionMismatchKind(kind: string | null): boolean {
+  return typeof kind === "string" && kind.startsWith("unictl_");
+}
+
 // ---------------------------------------------------------------------------
 // editor.compile / play / stop / refresh — functional via editor_control IPC
 // Phase F: --wait <state> + --timeout integration. After IPC dispatch,
@@ -248,6 +252,10 @@ function makeEditorActionCommand(action: string, summary: string) {
         const failed = result && typeof result === "object" &&
           (((result as { success?: unknown }).success === false) || ((result as { ok?: unknown }).ok === false));
         if (failed) {
+          if (isVersionMismatchKind(kind) && result && typeof result === "object") {
+            emit("new", result, flags);
+            process.exit(exitCodeFor(result as { ok?: boolean; error?: { exit_code?: number } }));
+          }
           if (action === "compile" && waitTarget !== null && isBusyKind(kind)) {
             let busyStatus: EditorStatusResult | null = null;
             try {
