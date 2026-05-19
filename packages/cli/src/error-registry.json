@@ -186,6 +186,14 @@
       "since_version": "0.4.0"
     },
     {
+      "kind": "editor_compile_error_state",
+      "emitted_from": ["cli", "editor_lane"],
+      "exit_code": 1,
+      "hint_text": "Unity has C# compile errors, so editor-side unictl workflows may be unreliable until those errors are fixed.",
+      "hint_command": "unictl command editor_log -p action=errors",
+      "since_version": "0.7.10"
+    },
+    {
       "kind": "job_not_found",
       "emitted_from": ["build_runner"],
       "exit_code": 3,

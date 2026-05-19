@@ -35,7 +35,8 @@
       "notes": [
         "Default output is JSON.",
         "For editor_log only, --format text emits data.lines, data.matches[].text, or errors groups as raw text for shell pipelines.",
-        "editor_log requires the current Unity session to have been started through unictl editor open/restart; stale or missing project logs return data.requires_editor_restart=true."
+        "editor_log requires the current Unity session to have been started through unictl editor open/restart; stale or missing project logs return data.requires_editor_restart=true.",
+        "If editor-side workflows fail while editor_log action=errors reports C# errors, callers should branch on error.kind=editor_compile_error_state and fix compile errors before retrying compile/refresh/wait/test workflows."
       ]
     },
     {
@@ -494,6 +495,7 @@
         "editor_dirty_scene",
         "editor_dirty_prefab_stage",
         "editor_reload_active",
+        "editor_compile_error_state",
         "results_path_unwritable",
         "test_already_running"
       ],

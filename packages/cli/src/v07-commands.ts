@@ -20,6 +20,7 @@ import { editorStatus, type EditorStatusResult } from "./editor";
 import { emit, exitCodeFor, type OutputFlags } from "./output";
 import { lookupCommandSchema } from "./schema";
 import { errorEnvelope } from "./error";
+import { enrichWithCompileErrorState, failIfCompileErrorState } from "./compile-diagnostics";
 import {
   WAIT_STATES,
   type WaitState,
@@ -271,8 +272,13 @@ function makeEditorActionCommand(action: string, summary: string) {
                 context: { action, result },
               });
               const payload = { ...env, error: { ...env.error, exit_code: isBusyKind(kind) ? 3 : 125 } };
-              emit("new", payload, flags);
-              process.exit(exitCodeFor(payload));
+              const enriched = await enrichWithCompileErrorState(payload, {
+                project: args.project as string | undefined,
+                workflow: `editor.${action}`,
+                related: [`editor.${action}`, "editor.status", "command"],
+              });
+              emit("new", enriched, flags);
+              process.exit(exitCodeFor(enriched));
             }
           } else {
             const env = errorEnvelope({
@@ -283,8 +289,13 @@ function makeEditorActionCommand(action: string, summary: string) {
               context: { action, result },
             });
             const payload = { ...env, error: { ...env.error, exit_code: isBusyKind(kind) ? 3 : 125 } };
-            emit("new", payload, flags);
-            process.exit(exitCodeFor(payload));
+            const enriched = await enrichWithCompileErrorState(payload, {
+              project: args.project as string | undefined,
+              workflow: `editor.${action}`,
+              related: [`editor.${action}`, "editor.status", "command"],
+            });
+            emit("new", enriched, flags);
+            process.exit(exitCodeFor(enriched));
           }
         }
 
@@ -303,6 +314,27 @@ function makeEditorActionCommand(action: string, summary: string) {
         });
         const waitEnv = outcomeToEnvelope(outcome);
         if (waitEnv.ok) {
+          if ((action === "compile" || action === "refresh") && waitTarget === "idle") {
+            const compileErrorPayload = await failIfCompileErrorState({
+              project: args.project as string | undefined,
+              workflow: `editor.${action} --wait idle`,
+              related: [`editor.${action}`, "wait", "editor.status", "command"],
+              context: {
+                action,
+                wait: {
+                  state: waitEnv.state,
+                  phase: waitEnv.phase,
+                  alive_ms_ago: waitEnv.alive_ms_ago,
+                  elapsed_ms: waitEnv.elapsed_ms,
+                },
+              },
+            });
+            if (compileErrorPayload) {
+              emit("new", compileErrorPayload, flags);
+              process.exit(exitCodeFor(compileErrorPayload));
+            }
+          }
+
           const payload = {
             ok: true,
             action,
@@ -329,8 +361,13 @@ function makeEditorActionCommand(action: string, summary: string) {
           error: waitEnv.error,
           ...(joinedExisting ? { joined_existing: true } : {}),
         };
-        emit("new", payload, flags);
-        process.exit(exitCodeFor(payload));
+        const enriched = await enrichWithCompileErrorState(payload, {
+          project: args.project as string | undefined,
+          workflow: `editor.${action} --wait ${waitTarget}`,
+          related: [`editor.${action}`, "wait", "editor.status", "command"],
+        });
+        emit("new", enriched, flags);
+        process.exit(exitCodeFor(enriched));
       } catch (err) {
         const message = err instanceof Error ? err.message : String(err);
         if (action === "compile" && waitTarget !== null) {
@@ -369,8 +406,13 @@ function makeEditorActionCommand(action: string, summary: string) {
           context: { action },
         });
         const payload = { ...env, error: { ...env.error, exit_code: 125 } };
-        emit("new", payload, flags);
-        process.exit(exitCodeFor(payload));
+        const enriched = await enrichWithCompileErrorState(payload, {
+          project: args.project as string | undefined,
+          workflow: `editor.${action}`,
+          related: [`editor.${action}`, "editor.status", "command"],
+        });
+        emit("new", enriched, flags);
+        process.exit(exitCodeFor(enriched));
       }
     },
   });
@@ -852,8 +894,32 @@ const waitCmd = defineCommand({
       project: args.project as string | undefined,
     });
     const payload = outcomeToEnvelope(outcome);
-    emit("new", payload, flags);
-    process.exit(exitCodeFor(payload));
+    if (payload.ok && state === "idle") {
+      const compileErrorPayload = await failIfCompileErrorState({
+        project: args.project as string | undefined,
+        workflow: "wait idle",
+        related: ["wait", "editor.status", "command"],
+        context: {
+          wait: {
+            state: payload.state,
+            phase: payload.phase,
+            alive_ms_ago: payload.alive_ms_ago,
+            elapsed_ms: payload.elapsed_ms,
+          },
+        },
+      });
+      if (compileErrorPayload) {
+        emit("new", compileErrorPayload, flags);
+        process.exit(exitCodeFor(compileErrorPayload));
+      }
+    }
+    const enriched = await enrichWithCompileErrorState(payload, {
+      project: args.project as string | undefined,
+      workflow: `wait ${state}`,
+      related: ["wait", "editor.status", "command"],
+    });
+    emit("new", enriched, flags);
+    process.exit(exitCodeFor(enriched));
   },
 });
 

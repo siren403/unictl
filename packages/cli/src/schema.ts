@@ -104,6 +104,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
       { cmd: "unictl editor compile", intent: "trigger in-editor recompile (fire-and-forget)" },
       { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and block until editor returns to idle" },
       { cmd: "unictl editor compile --no-json", intent: "human-readable output" },
+      { cmd: "unictl editor compile --wait idle", intent: "if error.kind=editor_compile_error_state, fix error.context.compile_errors before retrying editor workflows" },
     ],
     exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.refresh", "editor.status", "wait"],
@@ -174,6 +175,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     examples: [
       { cmd: "unictl editor refresh --wait idle --timeout 90s", intent: "trigger refresh and block until import settles to idle" },
       { cmd: "unictl editor refresh", intent: "re-import changed assets (fire-and-forget)" },
+      { cmd: "unictl editor refresh --wait idle", intent: "if error.kind=editor_compile_error_state, fix error.context.compile_errors before investigating IPC or package failures" },
     ],
     exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.compile", "editor.status", "wait"],
@@ -458,6 +460,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     examples: [
       { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and wait for idle" },
       { cmd: "unictl wait reachable --timeout 5s", intent: "fast pipe-responsiveness probe" },
+      { cmd: "unictl wait idle", intent: "if error.kind=editor_compile_error_state, fix error.context.compile_errors before retrying editor-side workflows" },
     ],
     exit_codes: [0, 2, 3, 124, 125, 130],
     related: ["editor.status", "editor.compile", "editor.play"],

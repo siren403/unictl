@@ -62,6 +62,7 @@
     { "kind": "liveness_buffer_too_small",        "code": 20498,  "hex": "0x5012" },
     { "kind": "editor_reload_active",             "code": 20512,  "hex": "0x5020" },
     { "kind": "editor_unresponsive",              "code": 20513,  "hex": "0x5021" },
+    { "kind": "editor_compile_error_state",        "code": 20514,  "hex": "0x5022" },
 
     { "kind": "project_locked",                   "code": 24576,  "hex": "0x6000" },
     { "kind": "progress_read_failed",             "code": 24577,  "hex": "0x6001" },

@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- Editor-side `compile`, `refresh`, `wait`, and editor-lane `test` failures now
+  check live `editor_log` compile errors and return
+  `editor_compile_error_state` with `compile_errors` context, preventing agents
+  from misattributing Unity C# compile-error states to DLL, UPM, or IPC causes.
+
 ---
 
 ## [0.7.9] - 2026-05-19

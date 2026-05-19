@@ -4,6 +4,7 @@ import { isAbsolute, join, relative, resolve } from "path";
 import { getProjectPaths } from "./socket";
 import { readUnityVersion, resolveUnityBinary, killProcess } from "./process";
 import { command, health } from "./client";
+import { detectCompileErrorState } from "./compile-diagnostics";
 import { errorExit } from "./error";
 import { parseDuration } from "./wait";
 import { getProjectEditorLogFiles } from "./log-paths";
@@ -506,11 +507,39 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
   try {
     resp = await command("test_run", params, { project: projectRoot });
   } catch (e: any) {
+    const diagnostic = await detectCompileErrorState({ project: projectRoot });
+    if (diagnostic) {
+      errorExit(
+        1,
+        "editor_compile_error_state",
+        "test editor lane failed while Unity has C# compile errors. Fix compile errors before retrying editor-side unictl workflows.",
+        "unictl command editor_log -p action=errors",
+        {
+          workflow: "test editor lane",
+          original_error: { kind: "ipc_error", message: e.message },
+          ...diagnostic,
+        },
+      );
+    }
     errorExit(3, "ipc_error", `IPC call failed: ${e.message}`);
   }
 
   if (!resp.ok) {
     const err = resp.error ?? {};
+    const diagnostic = await detectCompileErrorState({ project: projectRoot });
+    if (diagnostic) {
+      errorExit(
+        1,
+        "editor_compile_error_state",
+        "test editor lane was rejected while Unity has C# compile errors. Fix compile errors before retrying editor-side unictl workflows.",
+        "unictl command editor_log -p action=errors",
+        {
+          workflow: "test editor lane",
+          original_error: err,
+          ...diagnostic,
+        },
+      );
+    }
     errorExit(
       2,
       err.kind ?? "ipc_error",
@@ -533,6 +562,29 @@ async function runEditorLane(args: EditorLaneArgs): Promise<TestResult> {
     expectedSession,
     expectedPid,
   });
+  const diagnostic = await detectCompileErrorState({ project: projectRoot });
+  if (diagnostic) {
+    errorExit(
+      1,
+      "editor_compile_error_state",
+      "test editor lane completed, but Unity has C# compile errors. Fix compile errors before treating editor-side test results as healthy.",
+      "unictl command editor_log -p action=errors",
+      {
+        workflow: "test editor lane",
+        test_result: {
+          ok: waited.ok,
+          total: waited.total,
+          passed: waited.passed,
+          failed: waited.failed,
+          skipped: waited.skipped,
+          results_file: waited.results_file,
+          job_id: waited.job_id,
+          progress_file: waited.progress_file,
+        },
+        ...diagnostic,
+      },
+    );
+  }
   return {
     ok: waited.ok,
     lane: waited.lane,

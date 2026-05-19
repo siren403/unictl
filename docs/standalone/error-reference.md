@@ -30,6 +30,7 @@ This document is auto-generated from `packages/cli/src/error-registry.json`.
 | `unity_not_found` | cli, doctor | 3 | Unity binary not found. Verify Unity Hub installation and project version. |
 | `project_not_detected` | doctor | 2 | Run unictl commands from within a Unity project directory, or pass --project <path>. |
 | `compile_failed` | compile | 1 | Unity compile errors found. Check errors[] in output for details. |
+| `editor_compile_error_state` | cli, editor_lane | 1 | Unity has C# compile errors, so editor-side unictl workflows may be unreliable until those errors are fixed. |
 | `job_not_found` | build_runner | 3 | No progress file for that job_id. Verify the id returned by build_project, or the job may have been pruned (retention policy keeps last 10). |
 | `progress_read_failed` | build_runner | 125 | Progress file exists but could not be read/parsed after retries. Transient AV/Dropbox lock or file corruption. Retry in a few seconds. |
 | `not_yet_implemented` | build_runner | 125 | this capability is scaffolded in P1; wire-up lands with later phases |

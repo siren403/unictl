@@ -36,6 +36,11 @@ not be the richer path for common agent workflows:
 - Use `unictl command editor_log -p action=tail --format text` only when a
   shell pipeline needs raw log lines. Keep the default JSON output for
   structured automation.
+- If `editor.compile`, `editor.refresh`, `wait`, or editor-lane `test` fails
+  with `error.kind=editor_compile_error_state`, treat Unity C# compile errors
+  as the primary cause. Inspect `error.context.compile_errors`, fix those
+  errors first, and do not infer native DLL, UPM import, or IPC transport
+  failure until compile errors are gone.
 - If a raw async job is exposed, provide a first-class wait/status companion
   before documenting progress-file parsing as an agent workflow.
 
