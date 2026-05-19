@@ -54,6 +54,11 @@ Rules:
 - Keep `[Unreleased]` in `CHANGELOG.md` populated before release.
 - Run `mise run release:dry-run -- <version>` before any real publish.
 - Real release command is `mise run release -- <version>` and performs version commit, npm publish, git push, tag, and tag push.
+- Release validation must not use a parent or external Unity project as the
+  consumer test target just because this repository is nested there. If a
+  running Unity editor locks bundled UPM/native files during release, identify
+  the locking process and ask before quitting it; treat that only as lock
+  remediation, not as consumer validation.
 
 ## Validation
 
@@ -105,7 +110,10 @@ For narrower changes:
 - `sandbox/UnictlSmokeProject` is a local Unity consumer project for Git UPM install, package resolve, and compile smoke tests.
 - Track only project source, `Packages/`, and `ProjectSettings/`.
 - Do not track Unity-generated local state such as `Library/`, `Temp/`, `Logs/`, `UserSettings/`, build outputs, `.sln`, or `.csproj`.
-- Use the sandbox first when reproducing consumer install issues.
+- Use the sandbox first when reproducing consumer install issues or running
+  post-release consumer validation. Do not substitute parent checkout projects
+  such as `D:/workspace/unity/PickUpCat` for sandbox validation unless the user
+  explicitly asks to test that project.
 
 ## Common Pitfalls
 
