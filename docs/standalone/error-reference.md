@@ -54,6 +54,9 @@ This document is auto-generated from `packages/cli/src/error-registry.json`.
 | `test_heartbeat_stale` | test, editor_lane | 8 | No progress update received for 5 seconds. Editor may be deadlocked or heavily throttled. |
 | `xml_save_failed` | test, editor_lane | 8 | Test results XML could not be saved. Check that --results path is writable. |
 | `deprecated_log_source` | editor_lane | 2 | The requested log source is deprecated. Use editor_log action=tail, search, or errors against the project-scoped editor log. |
+| `editor_log_unavailable` | editor_lane | 1 | Project-scoped editor log is unavailable. Restart the editor through unictl so the current session writes Library/unictl-state/editor-current.log. |
+| `editor_log_project_log_missing` | editor_lane | 1 | Project-scoped editor log is missing. The current editor was probably not started through unictl. |
+| `editor_log_stale_session` | editor_lane | 1 | Project-scoped editor log predates the current Unity process, so returning it would expose stale diagnostics. |
 | `not_implemented` | cli | 78 | This command is a Phase C skeleton stub; functional implementation arrives in Phase D or E. Track progress on issue siren403/unictl#7. |
 | `editor_reload_active` | cli, editor_lane | 3 | Editor is reloading; retry after /liveness reports phase != reloading. CLI --wait handles this transparently in v0.7. |
 | `wait_timeout` | cli | 124 | Wait budget exhausted before the target state was reached. Verify editor health with 'unictl health' or raise --timeout. F.3 matrix lives in docs/standalone/v0.7-spikes/F3-wait-timeouts.md. |

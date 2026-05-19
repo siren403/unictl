@@ -378,6 +378,30 @@
       "since_version": "0.7.8"
     },
     {
+      "kind": "editor_log_unavailable",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 1,
+      "hint_text": "Project-scoped editor log is unavailable. Restart the editor through unictl so the current session writes Library/unictl-state/editor-current.log.",
+      "hint_command": "unictl editor restart",
+      "since_version": "0.7.9"
+    },
+    {
+      "kind": "editor_log_project_log_missing",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 1,
+      "hint_text": "Project-scoped editor log is missing. The current editor was probably not started through unictl.",
+      "hint_command": "unictl editor restart",
+      "since_version": "0.7.9"
+    },
+    {
+      "kind": "editor_log_stale_session",
+      "emitted_from": ["editor_lane"],
+      "exit_code": 1,
+      "hint_text": "Project-scoped editor log predates the current Unity process, so returning it would expose stale diagnostics.",
+      "hint_command": "unictl editor restart",
+      "since_version": "0.7.9"
+    },
+    {
       "kind": "not_implemented",
       "emitted_from": ["cli"],
       "exit_code": 78,

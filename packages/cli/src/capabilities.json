@@ -34,7 +34,8 @@
       "help": "unictl command list (requires live editor)",
       "notes": [
         "Default output is JSON.",
-        "For editor_log only, --format text emits data.lines, data.matches[].text, or errors groups as raw text for shell pipelines."
+        "For editor_log only, --format text emits data.lines, data.matches[].text, or errors groups as raw text for shell pipelines.",
+        "editor_log requires the current Unity session to have been started through unictl editor open/restart; stale or missing project logs return data.requires_editor_restart=true."
       ]
     },
     {

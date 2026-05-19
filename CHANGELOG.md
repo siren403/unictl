@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- `editor_log` now fails closed with structured remediation details when the
+  project-scoped editor log is missing or predates the current Unity process,
+  allowing callers to detect `requires_editor_restart=true` instead of acting
+  on stale log data.
+
 ---
 
 ## [0.7.8] - 2026-05-15

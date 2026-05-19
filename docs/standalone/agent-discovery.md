@@ -29,8 +29,10 @@ not be the richer path for common agent workflows:
 - Prefer `unictl wait <state>` over ad-hoc `editor_control` polling.
 - Prefer `unictl test` over raw `unictl command test_run`.
 - Prefer `unictl command editor_log -p action=tail|search|errors` over
-  deprecated `game_logs`; project-scoped `editor_log` is the reliable log
-  source for agent diagnostics.
+  deprecated `game_logs`. Project-scoped `editor_log` is reliable only when the
+  editor session was started through `unictl editor open` or `unictl editor
+  restart`; otherwise it returns structured failure details such as
+  `requires_editor_restart=true` instead of silently reading stale data.
 - Use `unictl command editor_log -p action=tail --format text` only when a
   shell pipeline needs raw log lines. Keep the default JSON output for
   structured automation.

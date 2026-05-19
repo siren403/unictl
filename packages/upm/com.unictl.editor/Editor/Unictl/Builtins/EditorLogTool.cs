@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
@@ -45,24 +46,24 @@ namespace Unictl.Tools
             var logSource = ResolveEditorLogSource();
             var logPath = logSource.LogPath;
 
-            if (!File.Exists(logPath))
-                return new ErrorResponse($"Editor log not found: {logPath}");
+            var readiness = ValidateLogSource(logSource);
+            if (!readiness.Usable)
+                return readiness.ToErrorResponse();
 
             var allLines = ReadLinesShared(logPath);
             var start = Math.Max(0, allLines.Count - lines);
             var result = allLines.Skip(start).ToArray();
 
-            return new SuccessResponse("Editor log tail (file-based, includes compile errors)", new
+            return new SuccessResponse("Editor log tail (file-based, includes compile errors)", readiness.With(new
             {
                 source = logSource.Source,
                 fallback_used = logSource.FallbackUsed,
-                warning = logSource.Warning,
                 includes_compile_errors = true,
                 log_path = logPath,
                 total_lines = allLines.Count,
                 returned_lines = result.Length,
                 lines = result
-            });
+            }));
         }
 
         private static object DoSearch(ToolParams p)
@@ -74,8 +75,9 @@ namespace Unictl.Tools
             var logSource = ResolveEditorLogSource();
             var logPath = logSource.LogPath;
 
-            if (!File.Exists(logPath))
-                return new ErrorResponse($"Editor log not found: {logPath}");
+            var readiness = ValidateLogSource(logSource);
+            if (!readiness.Usable)
+                return readiness.ToErrorResponse();
 
             var matches = ReadLinesShared(logPath)
                 .Select((line, index) => new { line, index })
@@ -84,17 +86,16 @@ namespace Unictl.Tools
                 .Select(x => new { line_number = x.index + 1, text = x.line })
                 .ToArray();
 
-            return new SuccessResponse($"Found {matches.Length} matches for '{pattern}' (file-based)", new
+            return new SuccessResponse($"Found {matches.Length} matches for '{pattern}' (file-based)", readiness.With(new
             {
                 source = logSource.Source,
                 fallback_used = logSource.FallbackUsed,
-                warning = logSource.Warning,
                 includes_compile_errors = true,
                 log_path = logPath,
                 match_mode = "literal_substring",
                 pattern,
                 matches
-            });
+            }));
         }
 
         private static object DoErrors(ToolParams p)
@@ -103,8 +104,9 @@ namespace Unictl.Tools
             var logSource = ResolveEditorLogSource();
             var logPath = logSource.LogPath;
 
-            if (!File.Exists(logPath))
-                return new ErrorResponse($"Editor log not found: {logPath}");
+            var readiness = ValidateLogSource(logSource);
+            if (!readiness.Usable)
+                return readiness.ToErrorResponse();
 
             var allLines = ReadLinesShared(logPath);
             var compileErrors = new List<object>();
@@ -125,16 +127,15 @@ namespace Unictl.Tools
 
             return new SuccessResponse(
                 total == 0 ? "No compile errors or exceptions found" : $"Found {compileTrimmed.Length} compile errors, {exceptionsTrimmed.Length} exceptions",
-                new
+                readiness.With(new
                 {
                     source = logSource.Source,
                     fallback_used = logSource.FallbackUsed,
-                    warning = logSource.Warning,
                     log_path = logPath,
                     compile_errors = compileTrimmed,
                     exceptions = exceptionsTrimmed,
                     total_count = total
-                });
+                }));
         }
 
         private static object DeprecatedGameLogsResponse(string action)
@@ -170,6 +171,7 @@ namespace Unictl.Tools
                 {
                     Source = "project",
                     LogPath = projectLogPath,
+                    ProjectLogPath = projectLogPath,
                     FallbackUsed = false,
                     Warning = null
                 };
@@ -180,6 +182,7 @@ namespace Unictl.Tools
             {
                 Source = "host",
                 LogPath = hostLogPath,
+                ProjectLogPath = projectLogPath,
                 FallbackUsed = true,
                 Warning = "Project-scoped editor log was not found. This fallback reads the host-wide Unity Editor.log and may include unrelated projects. Start the editor through unictl editor open to create the project log."
             };
@@ -208,12 +211,150 @@ namespace Unictl.Tools
 #endif
         }
 
+        private static LogReadiness ValidateLogSource(LogSource logSource)
+        {
+            var editorPid = Process.GetCurrentProcess().Id;
+            var processStartedAt = GetProcessStartedAtUtc();
+            var logExists = File.Exists(logSource.LogPath);
+            var projectLogExists = File.Exists(logSource.ProjectLogPath);
+            var logLastWriteAt = logExists ? (DateTime?)File.GetLastWriteTimeUtc(logSource.LogPath) : null;
+
+            var baseData = new LogReadiness
+            {
+                Usable = true,
+                Source = logSource.Source,
+                FallbackUsed = logSource.FallbackUsed,
+                Warning = logSource.Warning,
+                LogPath = logSource.LogPath,
+                ProjectLogPath = logSource.ProjectLogPath,
+                LogExists = logExists,
+                ProjectLogExists = projectLogExists,
+                EditorPid = editorPid,
+                EditorProcessStartedAt = processStartedAt,
+                LogLastWriteAt = logLastWriteAt,
+                LogIsCurrentSession = null,
+                RequiresEditorRestart = false,
+                RecommendedCommand = null,
+                Kind = null,
+                Message = null
+            };
+
+            if (!logExists)
+            {
+                baseData.Usable = false;
+                baseData.Kind = "editor_log_unavailable";
+                baseData.Message = $"Project-scoped editor log not found: {logSource.ProjectLogPath}";
+                baseData.Warning = "The current editor was probably not started through unictl editor open/restart, so unictl cannot guarantee project-scoped live editor_log data.";
+                baseData.RequiresEditorRestart = true;
+                baseData.RecommendedCommand = "unictl editor restart";
+                return baseData;
+            }
+
+            if (logSource.FallbackUsed)
+            {
+                baseData.Usable = false;
+                baseData.Kind = "editor_log_project_log_missing";
+                baseData.Message = "Project-scoped editor log is missing; refusing to read the host-wide Unity Editor.log as current-session data.";
+                baseData.Warning = "Start or restart the editor with unictl so Unity writes Library/unictl-state/editor-current.log for this project.";
+                baseData.LogPath = logSource.ProjectLogPath;
+                baseData.LogExists = false;
+                baseData.RequiresEditorRestart = true;
+                baseData.RecommendedCommand = "unictl editor restart";
+                return baseData;
+            }
+
+            if (processStartedAt.HasValue && logLastWriteAt.HasValue)
+            {
+                var staleThreshold = processStartedAt.Value.AddSeconds(-5);
+                if (logLastWriteAt.Value < staleThreshold)
+                {
+                    baseData.Usable = false;
+                    baseData.Kind = "editor_log_stale_session";
+                    baseData.Message = "Project-scoped editor log predates the current Unity editor process; refusing to return stale log data.";
+                    baseData.Warning = "The editor may have been started outside unictl while an old Library/unictl-state/editor-current.log remained on disk.";
+                    baseData.LogIsCurrentSession = false;
+                    baseData.RequiresEditorRestart = true;
+                    baseData.RecommendedCommand = "unictl editor restart";
+                    return baseData;
+                }
+
+                baseData.LogIsCurrentSession = true;
+            }
+
+            return baseData;
+        }
+
+        private static DateTime? GetProcessStartedAtUtc()
+        {
+            try
+            {
+                return Process.GetCurrentProcess().StartTime.ToUniversalTime();
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
         private class LogSource
         {
             public string Source;
             public string LogPath;
+            public string ProjectLogPath;
             public bool FallbackUsed;
             public string Warning;
+        }
+
+        private class LogReadiness
+        {
+            public bool Usable;
+            public string Source;
+            public bool FallbackUsed;
+            public string Warning;
+            public string LogPath;
+            public string ProjectLogPath;
+            public bool LogExists;
+            public bool ProjectLogExists;
+            public int EditorPid;
+            public DateTime? EditorProcessStartedAt;
+            public DateTime? LogLastWriteAt;
+            public bool? LogIsCurrentSession;
+            public bool RequiresEditorRestart;
+            public string RecommendedCommand;
+            public string Kind;
+            public string Message;
+
+            public ErrorResponse ToErrorResponse()
+            {
+                return new ErrorResponse(Message, With(new
+                {
+                    kind = Kind
+                }));
+            }
+
+            public object With(object payload)
+            {
+                var data = JObject.FromObject(payload ?? new { });
+                data["source"] = Source;
+                data["fallback_used"] = FallbackUsed;
+                data["warning"] = Warning;
+                data["log_path"] = LogPath;
+                data["project_log_path"] = ProjectLogPath;
+                data["log_exists"] = LogExists;
+                data["project_log_exists"] = ProjectLogExists;
+                data["editor_pid"] = EditorPid;
+                data["editor_process_started_at"] = FormatUtc(EditorProcessStartedAt);
+                data["log_last_write_at"] = FormatUtc(LogLastWriteAt);
+                data["log_is_current_session"] = LogIsCurrentSession.HasValue ? JToken.FromObject(LogIsCurrentSession.Value) : JValue.CreateNull();
+                data["requires_editor_restart"] = RequiresEditorRestart;
+                data["recommended_command"] = RecommendedCommand;
+                return data;
+            }
+
+            private static string FormatUtc(DateTime? value)
+            {
+                return value.HasValue ? value.Value.ToString("o") : null;
+            }
         }
     }
 }
