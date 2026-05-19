@@ -11,6 +11,18 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.9] - 2026-05-19
+
+---
+
+## [0.7.9] - 2026-05-19
+
+---
+
+## [0.7.9] - 2026-05-19
+
 ### Fixed
 
 - `editor_log` now fails closed with structured remediation details when the
