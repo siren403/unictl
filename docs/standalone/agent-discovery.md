@@ -36,6 +36,11 @@ not be the richer path for common agent workflows:
 - Use `unictl command editor_log -p action=tail --format text` only when a
   shell pipeline needs raw log lines. Keep the default JSON output for
   structured automation.
+- If a live GameObject path is unknown, inspect the live hierarchy before
+  guessing paths or reading scene YAML. Use `unictl command hierarchy_tree -p
+  target=live`; add `-p include_components=true` and filters such as `-p
+  filter_component=EventSystem` when looking for runtime or
+  `DontDestroyOnLoad` objects.
 - If `editor.compile`, `editor.refresh`, `wait`, or editor-lane `test` fails
   with `error.kind=editor_compile_error_state`, treat Unity C# compile errors
   as the primary cause. Inspect `error.context.compile_errors`, fix those

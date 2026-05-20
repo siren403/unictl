@@ -11,6 +11,12 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Added
+
+- Added the live-editor `hierarchy_tree` builtin tool for agent path discovery.
+  It lists loaded scene roots and Play Mode `DontDestroyOnLoad` roots, with
+  depth, component, name, and payload-limit filters.
+
 ---
 
 ## [0.7.10] - 2026-05-19
