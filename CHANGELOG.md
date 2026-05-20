@@ -11,6 +11,14 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.13] - 2026-05-20
+
+---
+
+## [0.7.13] - 2026-05-20
+
 ### Fixed
 
 - `unictl editor compile --wait idle` now reports compile lifecycle proof from
