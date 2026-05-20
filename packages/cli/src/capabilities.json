@@ -162,7 +162,11 @@
             "--timeout"
           ],
           "help": "unictl editor compile --help",
-          "schema": "unictl schema editor.compile"
+          "schema": "unictl schema editor.compile",
+          "notes": [
+            "`unictl editor compile --wait idle` returns compile_lifecycle with compile_observed, compile_sequence_before/after, compile_started_at, compile_finished_at, and result_confidence.",
+            "Agents should treat result_confidence=high as proof that a post-request Unity CompilationPipeline cycle completed; compile_observed=false means idle was reached without that proof."
+          ]
         },
         {
           "name": "play",

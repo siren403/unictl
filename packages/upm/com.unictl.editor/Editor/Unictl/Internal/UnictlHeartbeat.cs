@@ -21,7 +21,10 @@
 using System;
 using System.Diagnostics;
 using System.Globalization;
+using System.IO;
 using System.Text;
+using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using UnityEditor;
 using UnityEditor.Compilation;
 using UnityEngine;
@@ -54,6 +57,12 @@ namespace Unictl
         private static double s_lastEmitTimeSinceStartup = -1.0;
         private static bool s_quitting;
         private static bool s_reloading;
+        private static int s_compileSequence;
+        private static bool s_compileActive;
+        private static string s_compileStartedAt;
+        private static string s_compileFinishedAt;
+        private static string s_compileContext;
+        private static JObject s_lastCompileRequest;
 
 #if UNICTL_HEARTBEAT_PERF
         private const int PerfSampleWindow = 60;
@@ -81,16 +90,60 @@ namespace Unictl
 
             // Seed phase + cache from current editor state. Avoids "idle" being reported
             // for the first second when the editor was already compiling at static init.
+            LoadCompileLifecycle();
+            s_compileActive = EditorApplication.isCompiling;
+            WriteCompileLifecycle();
             RefreshPhase(forceEmit: true);
         }
 
-        private static void OnCompilationStarted(object _)
+        internal static JObject RecordCompileRequest(string source, bool refreshRequested, bool scriptCompilationRequested)
         {
+            var request = new JObject
+            {
+                ["request_id"] = Guid.NewGuid().ToString("N"),
+                ["source"] = source,
+                ["requested_at"] = DateTime.UtcNow.ToString("o"),
+                ["pre_compile_sequence"] = s_compileSequence,
+                ["is_compiling_at_dispatch"] = EditorApplication.isCompiling,
+                ["refresh_requested"] = refreshRequested,
+                ["script_compilation_requested"] = scriptCompilationRequested,
+            };
+            s_lastCompileRequest = request;
+            WriteCompileLifecycle();
+            return (JObject)request.DeepClone();
+        }
+
+        internal static JObject CompileLifecycleSnapshot()
+        {
+            return new JObject
+            {
+                ["schema_version"] = 1,
+                ["sequence"] = s_compileSequence,
+                ["is_compiling"] = EditorApplication.isCompiling || s_compileActive,
+                ["started_at"] = s_compileStartedAt == null ? JValue.CreateNull() : new JValue(s_compileStartedAt),
+                ["finished_at"] = s_compileFinishedAt == null ? JValue.CreateNull() : new JValue(s_compileFinishedAt),
+                ["context"] = s_compileContext == null ? JValue.CreateNull() : new JValue(s_compileContext),
+                ["last_request"] = s_lastCompileRequest == null ? JValue.CreateNull() : (JToken)s_lastCompileRequest.DeepClone(),
+            };
+        }
+
+        private static void OnCompilationStarted(object context)
+        {
+            s_compileSequence++;
+            s_compileActive = true;
+            s_compileStartedAt = DateTime.UtcNow.ToString("o");
+            s_compileFinishedAt = null;
+            s_compileContext = context?.ToString();
+            WriteCompileLifecycle();
             RefreshPhase(forceEmit: true);
         }
 
-        private static void OnCompilationFinished(object _)
+        private static void OnCompilationFinished(object context)
         {
+            s_compileActive = false;
+            s_compileFinishedAt = DateTime.UtcNow.ToString("o");
+            s_compileContext = context?.ToString() ?? s_compileContext;
+            WriteCompileLifecycle();
             RefreshPhase(forceEmit: true);
         }
 
@@ -231,6 +284,63 @@ namespace Unictl
                 case Phase.Paused: return "paused";
                 default: return "idle";
             }
+        }
+
+        private static void WriteCompileLifecycle()
+        {
+            try
+            {
+                var path = GetCompileLifecyclePath();
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, CompileLifecycleSnapshot().ToString(), Encoding.UTF8);
+            }
+            catch (Exception ex)
+            {
+                UnityEngine.Debug.LogWarning($"[unictl] compile lifecycle write failed: {ex.Message}");
+            }
+        }
+
+        private static void LoadCompileLifecycle()
+        {
+            try
+            {
+                var path = GetCompileLifecyclePath();
+                if (!File.Exists(path))
+                    return;
+
+                JObject existing;
+                using (var reader = new JsonTextReader(new StringReader(File.ReadAllText(path, Encoding.UTF8))))
+                {
+                    reader.DateParseHandling = DateParseHandling.None;
+                    existing = JObject.Load(reader);
+                }
+                s_compileSequence = existing["sequence"]?.ToObject<int>() ?? 0;
+                s_compileActive = existing["is_compiling"]?.ToObject<bool>() ?? false;
+                s_compileStartedAt = existing["started_at"]?.Type == JTokenType.String
+                    ? existing["started_at"]?.ToString()
+                    : null;
+                s_compileFinishedAt = existing["finished_at"]?.Type == JTokenType.String
+                    ? existing["finished_at"]?.ToString()
+                    : null;
+                s_compileContext = existing["context"]?.Type == JTokenType.String
+                    ? existing["context"]?.ToString()
+                    : null;
+                s_lastCompileRequest = existing["last_request"] as JObject;
+            }
+            catch
+            {
+                s_compileSequence = 0;
+                s_compileActive = false;
+                s_compileStartedAt = null;
+                s_compileFinishedAt = null;
+                s_compileContext = null;
+                s_lastCompileRequest = null;
+            }
+        }
+
+        private static string GetCompileLifecyclePath()
+        {
+            return Path.Combine(Path.GetDirectoryName(Application.dataPath), "Library", "unictl-state", "compile-lifecycle.json");
         }
 
         private static void AppendField(StringBuilder sb, string key, string value)

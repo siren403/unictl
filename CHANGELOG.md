@@ -11,6 +11,13 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- `unictl editor compile --wait idle` now reports compile lifecycle proof from
+  Unity `CompilationPipeline` events, including observed start/finish sequence
+  and confidence, so agents no longer have to infer compile completion from
+  idle state or editor logs alone.
+
 ---
 
 ## [0.7.12] - 2026-05-20

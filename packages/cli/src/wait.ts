@@ -232,6 +232,10 @@ function matchEditorStatus(target: WaitState, status: EditorStatusResult): Match
   const idleByStateSnapshot =
     status.reachable === true &&
     status.state_reachable === true &&
+    phase !== "compiling" &&
+    phase !== "reloading" &&
+    phase !== "unresponsive" &&
+    phase !== "never_seen" &&
     status.is_compiling !== true &&
     status.is_reloading_domain !== true &&
     status.is_importing_assets !== true &&

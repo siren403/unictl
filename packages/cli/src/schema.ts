@@ -102,7 +102,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     args: [...COMMON_ARGS, ...EDITOR_WAIT_ARGS],
     examples: [
       { cmd: "unictl editor compile", intent: "trigger in-editor recompile (fire-and-forget)" },
-      { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile and block until editor returns to idle" },
+      { cmd: "unictl editor compile --wait idle --timeout 90s", intent: "trigger compile, block until editor returns to idle, and inspect compile_lifecycle.compile_observed/result_confidence" },
       { cmd: "unictl editor compile --no-json", intent: "human-readable output" },
       { cmd: "unictl editor compile --wait idle", intent: "if error.kind=editor_compile_error_state, fix error.context.compile_errors before retrying editor workflows" },
       { cmd: "unictl editor compile --wait idle", intent: "if error.kind=unictl_upm_too_old or unictl_cli_too_old, follow error.context.recommended_commands before retrying" },

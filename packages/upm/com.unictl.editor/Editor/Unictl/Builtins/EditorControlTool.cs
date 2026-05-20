@@ -8,6 +8,7 @@ using UnityEditorInternal;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Unictl.TestRunner;
+using Unictl;
 
 namespace Unictl.Tools
 {
@@ -70,13 +71,22 @@ namespace Unictl.Tools
         {
             if (EditorApplication.isPlaying || EditorApplication.isPlayingOrWillChangePlaymode)
             {
+                var deferredRequest = UnictlHeartbeat.RecordCompileRequest(
+                    "editor_control.compile",
+                    refreshRequested: false,
+                    scriptCompilationRequested: false);
+                deferredRequest["deferred_until_edit_mode"] = true;
                 _compileAfterPlayStop = true;
                 EditorApplication.isPlaying = false;
-                return new SuccessResponse("Stopping play mode before compile", GetStateData());
+                return new SuccessResponse("Stopping play mode before compile", GetStateData(deferredRequest));
             }
 
+            var request = UnictlHeartbeat.RecordCompileRequest(
+                "editor_control.compile",
+                refreshRequested: true,
+                scriptCompilationRequested: true);
             RequestCompile();
-            return new SuccessResponse("Compile requested", GetStateData());
+            return new SuccessResponse("Compile requested", GetStateData(request));
         }
 
         private static object DoRefresh()
@@ -148,7 +158,7 @@ namespace Unictl.Tools
             });
         }
 
-        private static object GetStateData()
+        private static object GetStateData(JObject compileRequest = null)
         {
             return new
             {
@@ -158,7 +168,9 @@ namespace Unictl.Tools
                 domain_reload = TestPreflight.GetDomainReloadStatus(),
                 run_in_background = Application.runInBackground,
                 unity_version = Application.unityVersion,
-                platform = Application.platform.ToString()
+                platform = Application.platform.ToString(),
+                compile_lifecycle = UnictlHeartbeat.CompileLifecycleSnapshot(),
+                compile_request = compileRequest
             };
         }
 

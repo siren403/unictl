@@ -29,6 +29,7 @@ import {
   runWait,
   outcomeToEnvelope,
 } from "./wait";
+import { getProjectPaths } from "./socket";
 import {
   loadProjectSettings,
   saveProjectSettings,
@@ -38,8 +39,8 @@ import {
   resolvePlatformYamlKey,
 } from "./project-settings";
 import { requireEditorClosed } from "./settings";
-import { existsSync } from "node:fs";
-import { resolve as resolvePath } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { join, resolve as resolvePath } from "node:path";
 
 // ---------------------------------------------------------------------------
 // Shared flag / response helpers
@@ -130,6 +131,120 @@ function isBusyKind(kind: string | null): boolean {
 
 function isVersionMismatchKind(kind: string | null): boolean {
   return typeof kind === "string" && kind.startsWith("unictl_");
+}
+
+function asRecord(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function nestedRecord(value: unknown, key: string): Record<string, unknown> | null {
+  return asRecord(asRecord(value)?.[key]);
+}
+
+function extractCompileRequest(result: unknown): Record<string, unknown> | null {
+  return nestedRecord(nestedRecord(result, "data"), "compile_request");
+}
+
+function extractCompileLifecycle(result: unknown): Record<string, unknown> | null {
+  return nestedRecord(nestedRecord(result, "data"), "compile_lifecycle");
+}
+
+function numberField(record: Record<string, unknown> | null, key: string): number | null {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : null;
+}
+
+function stringField(record: Record<string, unknown> | null, key: string): string | null {
+  const value = record?.[key];
+  return typeof value === "string" && value.length > 0 ? value : null;
+}
+
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function readCompileLifecycleFile(project?: string): Record<string, unknown> | null {
+  try {
+    const { projectRoot } = getProjectPaths(project);
+    const path = join(projectRoot, "Library", "unictl-state", "compile-lifecycle.json");
+    if (!existsSync(path)) return null;
+    return asRecord(JSON.parse(readFileSync(path, "utf-8").replace(/^\uFEFF/, "")));
+  } catch {
+    return null;
+  }
+}
+
+function compileObservedAfter(
+  lifecycle: Record<string, unknown> | null,
+  beforeSequence: number | null,
+): boolean {
+  const afterSequence = numberField(lifecycle, "sequence");
+  const startedAt = stringField(lifecycle, "started_at");
+  const isCompiling = lifecycle?.is_compiling === true;
+  return beforeSequence !== null &&
+    afterSequence !== null &&
+    afterSequence > beforeSequence &&
+    startedAt !== null &&
+    !isCompiling;
+}
+
+async function waitForCompileLifecycleFile(args: {
+  project?: string;
+  beforeSequence: number | null;
+  fallback: Record<string, unknown> | null;
+}): Promise<Record<string, unknown> | null> {
+  for (let attempt = 0; attempt < 20; attempt++) {
+    const lifecycle = readCompileLifecycleFile(args.project) ?? args.fallback;
+    if (compileObservedAfter(lifecycle, args.beforeSequence)) return lifecycle;
+    await sleep(250);
+  }
+  return readCompileLifecycleFile(args.project) ?? args.fallback;
+}
+
+async function buildCompileLifecycleResult(args: {
+  project?: string;
+  result: unknown;
+  joinedExisting: boolean;
+}): Promise<Record<string, unknown> | null> {
+  const request = extractCompileRequest(args.result);
+  let statusResponse: unknown = null;
+  try {
+    statusResponse = await ipcCommand("editor_control", { action: "status" }, { project: args.project });
+  } catch {
+    statusResponse = null;
+  }
+
+  const beforeLifecycle = extractCompileLifecycle(args.result);
+  const afterLifecycle = extractCompileLifecycle(statusResponse) ?? beforeLifecycle;
+  const beforeSequence = numberField(request, "pre_compile_sequence") ?? numberField(beforeLifecycle, "sequence");
+  const finalLifecycle = await waitForCompileLifecycleFile({
+    project: args.project,
+    beforeSequence,
+    fallback: afterLifecycle,
+  });
+  const afterSequence = numberField(finalLifecycle, "sequence");
+  const startedAt = stringField(finalLifecycle, "started_at");
+  const finishedAt = stringField(finalLifecycle, "finished_at");
+  const observed = compileObservedAfter(finalLifecycle, beforeSequence);
+
+  if (!request && !finalLifecycle) return null;
+
+  return {
+    compile_request_id: stringField(request, "request_id"),
+    compile_observed: observed,
+    compile_started_at: observed ? startedAt : null,
+    compile_finished_at: observed ? finishedAt : null,
+    compile_sequence_before: beforeSequence,
+    compile_sequence_after: afterSequence,
+    result_confidence: observed ? "high" : "low",
+    result_source: observed ? "compilation_pipeline" : "editor_idle_without_observed_post_request_compile",
+    note: observed
+      ? "CompilationPipeline reported a post-request compile cycle before idle."
+      : "Idle was reached, but no post-request CompilationPipeline cycle was observed by unictl.",
+    request,
+    lifecycle: finalLifecycle,
+    ...(args.joinedExisting ? { joined_existing_compile: true } : {}),
+  };
 }
 
 // ---------------------------------------------------------------------------
@@ -322,6 +437,14 @@ function makeEditorActionCommand(action: string, summary: string) {
         });
         const waitEnv = outcomeToEnvelope(outcome);
         if (waitEnv.ok) {
+          const compileLifecycle = action === "compile" && waitTarget === "idle"
+            ? await buildCompileLifecycleResult({
+              project: args.project as string | undefined,
+              result,
+              joinedExisting,
+            })
+            : null;
+
           if ((action === "compile" || action === "refresh") && waitTarget === "idle") {
             const compileErrorPayload = await failIfCompileErrorState({
               project: args.project as string | undefined,
@@ -353,6 +476,7 @@ function makeEditorActionCommand(action: string, summary: string) {
               alive_ms_ago: waitEnv.alive_ms_ago,
               elapsed_ms: waitEnv.elapsed_ms,
             },
+            ...(compileLifecycle ? { compile_lifecycle: compileLifecycle } : {}),
             ...(joinedExisting ? { joined_existing: true } : {}),
           };
           emit("new", payload, flags);

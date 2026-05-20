@@ -70,6 +70,12 @@ not be the richer path for common agent workflows:
   as the primary cause. Inspect `error.context.compile_errors`, fix those
   errors first, and do not infer native DLL, UPM import, or IPC transport
   failure until compile errors are gone.
+- For `unictl editor compile --wait idle`, inspect
+  `compile_lifecycle.compile_observed` and `compile_lifecycle.result_confidence`.
+  Treat `result_confidence=high` as proof that a post-request Unity
+  `CompilationPipeline` cycle started and finished. Treat
+  `compile_observed=false` as an uncertain idle result that may need a retry,
+  log inspection, or editor focus/state investigation.
 - Unsafe editor-side workflows require CLI/UPM version compatibility. If
   `error.kind=unictl_cli_too_old`, update the CLI before retrying. If
   `error.kind=unictl_upm_too_old` or `unictl_upm_version_unknown`, run the

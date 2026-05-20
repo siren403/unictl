@@ -57,6 +57,7 @@ export type EditorStatusResult = {
   run_in_background: boolean | null;
   unity_version: string | null;
   platform: string | null;
+  compile_lifecycle?: unknown;
   unictl?: unknown;
   diagnostics?: {
     state_error?: string;
@@ -72,6 +73,7 @@ type EditorControlStatusData = {
   run_in_background?: boolean;
   unity_version?: string;
   platform?: string;
+  compile_lifecycle?: unknown;
   unictl?: unknown;
 };
 
@@ -285,6 +287,7 @@ export async function editorStatus(opts?: { project?: string }): Promise<EditorS
     run_in_background: boolOrNull(stateData?.run_in_background),
     unity_version: stringOrNull(stateData?.unity_version ?? lastState?.unity_version),
     platform: stringOrNull(stateData?.platform ?? lastState?.platform),
+    ...(stateData?.compile_lifecycle !== undefined ? { compile_lifecycle: stateData.compile_lifecycle } : {}),
     ...(stateData?.unictl !== undefined ? { unictl: stateData.unictl } : {}),
     ...(Object.keys(diagnostics).length > 0 ? { diagnostics } : {}),
   };
