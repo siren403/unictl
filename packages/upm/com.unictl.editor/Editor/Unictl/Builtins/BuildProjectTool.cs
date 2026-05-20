@@ -40,6 +40,15 @@ namespace Unictl.Builtins
 
             [ToolParameter("Override the auto-generated job identifier for this build (useful for CI traceability)", Required = false)]
             public string JobId { get; set; }
+
+            [ToolParameter("Project static build method to invoke, e.g. Namespace.Type.Method", Required = false)]
+            public string CustomMethod { get; set; }
+
+            [ToolParameter("Custom build method parameters as a key-value object", Required = false)]
+            public JObject MethodParams { get; set; }
+
+            [ToolParameter("Suspicious fast-return threshold for custom methods in milliseconds; 0 disables (default: 5000)", Required = false, DefaultValue = "5000")]
+            public string MinExpectedDurationMs { get; set; }
         }
 
         public static object HandleCommand(JObject parameters)
@@ -72,6 +81,9 @@ namespace Unictl.Builtins
                             new { name = "timeout_sec", type = "string", required = false, @default = "0", description = "Client-side wait timeout in seconds; 0 = unlimited. Exit code 124 on timeout.", example = "3600" },
                             new { name = "log_level", type = "string", required = false, @default = "info", description = "Log verbosity", @enum = new[] { "debug", "info", "warn", "error" }, example = "info" },
                             new { name = "job_id", type = "string", required = false, description = "Override auto-generated job identifier", example = "ci-abc123" },
+                            new { name = "custom_method", type = "string", required = false, description = "Project static build method to invoke", example = "PickUpCatBuild.Android" },
+                            new { name = "method_params", type = "object", required = false, description = "Custom build method parameters", example = new { channel = "release" } },
+                            new { name = "min_expected_duration_ms", type = "int", required = false, @default = "5000", description = "Suspicious fast-return threshold for custom methods; 0 disables", example = "5000" },
                         },
                         companions = new[] { "build_status", "build_cancel" },
                         see_also = new[] { "unictl build --help" },

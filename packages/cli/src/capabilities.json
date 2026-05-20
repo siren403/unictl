@@ -9,6 +9,8 @@
         "--target",
         "--output",
         "--build-profile",
+        "--method",
+        "--method-param",
         "--batch",
         "--wait"
       ],
@@ -29,6 +31,7 @@
       "notes": [
         "`unictl build --wait` streams normalized lifecycle JSON; do not parse raw progress-file states such as done or aborted.",
         "Trigger responses include job_id, status_command, cancel_command, poll_interval_ms, and terminal_states.",
+        "Custom project build methods are invoked with --method Namespace.Type.Method; use UnictlBuildContext and ctx.Begin(...) for high-confidence lifecycle reporting.",
         "Successful low-confidence custom build results may still exit 0 but include suspicious=true and recommended_action."
       ],
       "subcommands": [
@@ -557,7 +560,10 @@
         "env",
         "timeout_sec",
         "log_level",
-        "job_id"
+        "job_id",
+        "custom_method",
+        "method_params",
+        "min_expected_duration_ms"
       ],
       "companions": [
         "build_status",
@@ -583,7 +589,9 @@
         "editor_running",
         "profile_switch_requires_batch",
         "profile_unsupported_on_this_unity",
-        "profile_not_applied"
+        "profile_not_applied",
+        "custom_build_failed",
+        "custom_build_exception"
       ],
       "unity_version": "2022.3+ (BuildProfile requires 6000.0+)"
     },
@@ -606,6 +614,11 @@
         "result_source",
         "result_confidence",
         "elapsed_ms",
+        "custom_method",
+        "method_elapsed_ms",
+        "context_available",
+        "context_started",
+        "terminal_context_reported",
         "warnings",
         "suspicion_reasons",
         "suspicious",

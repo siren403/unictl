@@ -74,6 +74,22 @@
       "since_version": "0.1.0"
     },
     {
+      "kind": "custom_build_failed",
+      "emitted_from": ["build_runner"],
+      "exit_code": 1,
+      "hint_text": "Inspect the custom build method; it reported failure through UnictlBuildContext.",
+      "hint_command": null,
+      "since_version": "0.7.11"
+    },
+    {
+      "kind": "custom_build_exception",
+      "emitted_from": ["build_runner"],
+      "exit_code": 1,
+      "hint_text": "Inspect the custom build method; it threw before reporting terminal status.",
+      "hint_command": null,
+      "since_version": "0.7.11"
+    },
+    {
       "kind": "editor_running",
       "emitted_from": ["cli", "compile"],
       "exit_code": 3,

@@ -20,6 +20,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
   discovery.
 - Added first-class `unictl build status --job-id <id>` and
   `unictl build cancel --job-id <id>` commands.
+- Added custom build method support via `unictl build --method
+  Namespace.Type.Method`, plus public `UnictlBuildContext` /
+  `UnictlBuildScope` APIs for scope-based lifecycle reporting.
 
 ### Fixed
 

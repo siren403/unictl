@@ -1,12 +1,17 @@
 using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
+using Unictl.Editor.Builds;
 using UnityEditor;
 using UnityEditor.Build.Reporting;
 using UnityEngine;
+using Debug = UnityEngine.Debug;
 
 namespace Unictl.Internal
 {
@@ -23,7 +28,7 @@ namespace Unictl.Internal
         static string _pendingJobId;
         static BuildParams _pendingParams;
 
-        public enum State { Queued, Running, Done, Failed }
+        public enum State { Queued, Running, Done, Failed, Aborted }
 
         // ---------------------------------
         // Public API
@@ -48,12 +53,15 @@ namespace Unictl.Internal
             if (EditorApplication.isUpdating)
                 return BuildError("editor_busy", "Editor is updating (AssetDatabase). Wait for it to finish.", null);
 
-            // BuildTarget 지원 여부
-            var parseErr = TryParseBuildTarget(p.Target, out var group, out var target);
-            if (parseErr != null)
-                return BuildError("invalid_param", parseErr, null);
-            if (!BuildPipeline.IsBuildTargetSupported(group, target))
-                return BuildError("target_unsupported", $"BuildTarget '{p.Target}' is not supported by this Unity installation.", null);
+            // BuildTarget 지원 여부. Custom method builds may not use Unity BuildTarget directly.
+            if (string.IsNullOrEmpty(p.CustomMethod))
+            {
+                var parseErr = TryParseBuildTarget(p.Target, out var group, out var target);
+                if (parseErr != null)
+                    return BuildError("invalid_param", parseErr, null);
+                if (!BuildPipeline.IsBuildTargetSupported(group, target))
+                    return BuildError("target_unsupported", $"BuildTarget '{p.Target}' is not supported by this Unity installation.", null);
+            }
 
             // BuildProfile: Unity 6000.0+ 요구
             if (!string.IsNullOrEmpty(p.BuildProfile) && !BuildProfileAdapter.Supported)
@@ -244,6 +252,14 @@ namespace Unictl.Internal
                     }
                 }
 
+                if (!string.IsNullOrEmpty(p.CustomMethod))
+                {
+                    var customState = ExecuteCustomBuild(jobId, p);
+                    if (Application.isBatchMode)
+                        EditorApplication.Exit(customState == State.Done ? 0 : 1);
+                    return;
+                }
+
                 var opts = BuildBuildPlayerOptions(p);
                 var report = BuildPipeline.BuildPlayer(opts);
                 var summary = report.summary;
@@ -347,6 +363,286 @@ namespace Unictl.Internal
             {
                 Debug.LogWarning($"[unictl] WriteProgress failed for job {jobId}: {ex.Message}");
             }
+        }
+
+        static State ExecuteCustomBuild(string jobId, BuildParams p)
+        {
+            var methodErr = ResolveCustomBuildMethod(p.CustomMethod, out var method, out var acceptsContext);
+            if (methodErr != null)
+            {
+                WriteCustomProgress(jobId, State.Failed, p, null, null, false, false, false, 0,
+                    new JArray("custom_method_not_found"), null, "method_resolve", "high",
+                    null, new ErrorInfo("invalid_param", methodErr));
+                return State.Failed;
+            }
+
+            var sw = Stopwatch.StartNew();
+            var warnings = new JArray();
+            var suspicionReasons = new JArray();
+            var terminalReported = false;
+            var terminalState = State.Done;
+            UnictlBuildContext ctx = null;
+
+            Action<UnictlBuildContextEvent> onReport = evt =>
+            {
+                if (evt == null) return;
+
+                if (evt.Kind == "scope_disposed_without_terminal")
+                {
+                    AddUnique(suspicionReasons, "missing_scope_terminal_report");
+                    AddUnique(warnings, $"Build scope '{evt.Phase}' was disposed without Complete, Fail, or Cancel.");
+                    return;
+                }
+
+                if (evt.Kind == "scope_started" || evt.Kind == "progress")
+                {
+                    WriteCustomProgress(jobId, State.Running, p, evt.Phase, evt.Message, true, true, false,
+                        sw.ElapsedMilliseconds, warnings, suspicionReasons, null, null, null, null, evt.Percent);
+                    return;
+                }
+
+                terminalReported = true;
+                if (evt.Kind == "succeeded")
+                {
+                    terminalState = State.Done;
+                    JObject metadata = null;
+                    if (evt.Report != null)
+                    {
+                        try
+                        {
+                            metadata = BuildMetadata.Compute(evt.Report.summary.outputPath, evt.Report.summary.platform);
+                        }
+                        catch (Exception metaEx)
+                        {
+                            Debug.LogWarning($"[unictl] BuildMetadata.Compute failed (non-fatal): {metaEx.Message}");
+                        }
+                    }
+
+                    WriteCustomProgress(jobId, State.Done, p, null, null, true, true, true, sw.ElapsedMilliseconds,
+                        warnings, suspicionReasons, "context_scope", "high", evt.Report?.summary, null, null, evt.OutputPath, metadata);
+                }
+                else if (evt.Kind == "failed")
+                {
+                    terminalState = State.Failed;
+                    WriteCustomProgress(jobId, State.Failed, p, null, null, true, true, true, sw.ElapsedMilliseconds,
+                        warnings, suspicionReasons, "context_scope", "high", null,
+                        new ErrorInfo(string.IsNullOrEmpty(evt.ErrorCode) ? "custom_build_failed" : evt.ErrorCode,
+                            evt.Message ?? evt.Exception?.Message ?? "Custom build failed."));
+                }
+                else if (evt.Kind == "cancelled")
+                {
+                    terminalState = State.Aborted;
+                    WriteCustomProgress(jobId, State.Aborted, p, null, evt.Message, true, true, true, sw.ElapsedMilliseconds,
+                        warnings, suspicionReasons, "context_scope", "high", null,
+                        new ErrorInfo("cancelled_by_user", evt.Message ?? "Custom build cancelled."));
+                }
+            };
+
+            if (acceptsContext)
+                ctx = new UnictlBuildContext(jobId, p.CustomMethod, ToStringDictionary(p.MethodParams), onReport);
+
+            try
+            {
+                method.Invoke(null, acceptsContext ? new object[] { ctx } : null);
+            }
+            catch (TargetInvocationException ex)
+            {
+                sw.Stop();
+                var inner = ex.InnerException ?? ex;
+                WriteCustomProgress(jobId, State.Failed, p, null, null, acceptsContext, ctx?.ContextStarted == true,
+                    ctx?.TerminalContextReported == true, sw.ElapsedMilliseconds, warnings, suspicionReasons,
+                    "method_exception", "high", null,
+                    new ErrorInfo("custom_build_exception", $"{inner.GetType().Name}: {inner.Message}"));
+                return State.Failed;
+            }
+            catch (Exception ex)
+            {
+                sw.Stop();
+                WriteCustomProgress(jobId, State.Failed, p, null, null, acceptsContext, ctx?.ContextStarted == true,
+                    ctx?.TerminalContextReported == true, sw.ElapsedMilliseconds, warnings, suspicionReasons,
+                    "method_exception", "high", null,
+                    new ErrorInfo("custom_build_exception", $"{ex.GetType().Name}: {ex.Message}"));
+                return State.Failed;
+            }
+
+            sw.Stop();
+            if (terminalReported)
+                return terminalState;
+
+            if (acceptsContext && ctx?.ContextStarted != true)
+                AddUnique(suspicionReasons, "context_not_started");
+            if (p.MinExpectedDurationMs > 0 && sw.ElapsedMilliseconds < p.MinExpectedDurationMs)
+                AddUnique(suspicionReasons, "method_elapsed_below_threshold");
+
+            WriteCustomProgress(jobId, State.Done, p, null, null, acceptsContext, ctx?.ContextStarted == true,
+                false, sw.ElapsedMilliseconds, warnings, suspicionReasons, "method_return", "low", null, null);
+            return State.Done;
+        }
+
+        static void WriteCustomProgress(
+            string jobId,
+            State state,
+            BuildParams p,
+            string phase,
+            string message,
+            bool contextAvailable,
+            bool contextStarted,
+            bool terminalContextReported,
+            long methodElapsedMs,
+            JArray warnings,
+            JArray suspicionReasons,
+            string resultSource,
+            string resultConfidence,
+            BuildSummary? summary,
+            ErrorInfo err,
+            float? percent = null,
+            string outputPath = null,
+            JObject metadata = null)
+        {
+            var terminal = state == State.Done || state == State.Failed || state == State.Aborted;
+            var suspicious = suspicionReasons != null && suspicionReasons.Count > 0;
+            var progress = new JObject
+            {
+                ["schema_version"] = 1,
+                ["job_id"] = jobId,
+                ["owner_pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
+                ["lane"] = Application.isBatchMode ? "batch" : "ipc",
+                ["state"] = state.ToString().ToLower(),
+                ["started_at"] = DateTime.UtcNow.ToString("o"),
+                ["params_echo"] = p?.ToRedactedEcho(),
+                ["custom_method"] = p?.CustomMethod,
+                ["method_elapsed_ms"] = methodElapsedMs,
+                ["context_available"] = contextAvailable,
+                ["context_started"] = contextStarted,
+                ["terminal_context_reported"] = terminalContextReported,
+                ["warnings"] = warnings ?? new JArray(),
+                ["suspicion_reasons"] = suspicionReasons ?? new JArray(),
+                ["suspicious"] = suspicious,
+            };
+
+            if (!string.IsNullOrEmpty(phase))
+                progress["phase"] = phase;
+            if (!string.IsNullOrEmpty(message))
+                progress["message"] = message;
+            if (percent.HasValue)
+                progress["progress"] = percent.Value;
+            if (terminal)
+                progress["finished_at"] = DateTime.UtcNow.ToString("o");
+            if (!string.IsNullOrEmpty(resultSource))
+                progress["result_source"] = resultSource;
+            if (!string.IsNullOrEmpty(resultConfidence))
+                progress["result_confidence"] = resultConfidence;
+            if ((resultConfidence == "low" || suspicious) && terminal)
+                progress["recommended_action"] = BuildInspectRecommendedAction();
+
+            if (summary.HasValue)
+            {
+                var reportSummary = new JObject
+                {
+                    ["result"] = summary.Value.result.ToString(),
+                    ["total_errors"] = summary.Value.totalErrors,
+                    ["total_warnings"] = summary.Value.totalWarnings,
+                    ["output_path"] = summary.Value.outputPath,
+                    ["build_time_ms"] = (long)summary.Value.totalTime.TotalMilliseconds,
+                };
+                if (metadata != null)
+                {
+                    foreach (var prop in metadata.Properties())
+                        reportSummary[prop.Name] = prop.Value;
+                }
+                progress["report_summary"] = reportSummary;
+            }
+            else if (!string.IsNullOrEmpty(outputPath))
+            {
+                progress["report_summary"] = new JObject { ["output_path"] = outputPath };
+            }
+
+            if (err != null)
+            {
+                progress["error"] = new JObject
+                {
+                    ["kind"] = err.Kind,
+                    ["message"] = err.Message,
+                    ["hint"] = err.Hint ?? HintTable.Get(err.Kind),
+                };
+            }
+
+            var path = Path.Combine(GetBuildsDir(), $"{jobId}.json");
+            WriteProgressAtomic(path, progress);
+        }
+
+        static JObject BuildInspectRecommendedAction() => new JObject
+        {
+            ["kind"] = "inspect_custom_build_method",
+            ["message"] = "Inspect the custom build method. unictl can only confirm that the method returned without throwing.",
+            ["checklist"] = new JArray(
+                "Confirm the method opens a build scope with ctx.Begin(...).",
+                "Confirm it actually calls BuildPipeline.BuildPlayer or the intended project build pipeline.",
+                "Confirm successful completion calls scope.Complete(...).",
+                "Confirm failures throw or call scope.Fail(...).",
+                "Avoid returning immediately after scheduling asynchronous work unless that worker reports status.")
+        };
+
+        static void AddUnique(JArray array, string value)
+        {
+            if (array == null || string.IsNullOrEmpty(value)) return;
+            foreach (var item in array)
+                if (item?.ToString() == value) return;
+            array.Add(value);
+        }
+
+        static Dictionary<string, string> ToStringDictionary(JObject obj)
+        {
+            var dict = new Dictionary<string, string>();
+            if (obj == null) return dict;
+            foreach (var prop in obj.Properties())
+                dict[prop.Name] = prop.Value?.ToString();
+            return dict;
+        }
+
+        static string ResolveCustomBuildMethod(string fullName, out MethodInfo method, out bool acceptsContext)
+        {
+            method = null;
+            acceptsContext = false;
+            if (string.IsNullOrWhiteSpace(fullName))
+                return "custom_method is required.";
+
+            var dot = fullName.LastIndexOf('.');
+            if (dot <= 0 || dot == fullName.Length - 1)
+                return $"custom_method must be Namespace.Type.Method: '{fullName}'";
+
+            var typeName = fullName.Substring(0, dot);
+            var methodName = fullName.Substring(dot + 1);
+            Type type = null;
+            foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+            {
+                type = assembly.GetType(typeName, false);
+                if (type != null) break;
+            }
+            if (type == null)
+                return $"Custom build type not found: '{typeName}'";
+
+            var candidates = type.GetMethods(BindingFlags.Public | BindingFlags.Static)
+                .Where(m => m.Name == methodName)
+                .ToArray();
+            foreach (var candidate in candidates)
+            {
+                var parameters = candidate.GetParameters();
+                if (parameters.Length == 0)
+                {
+                    method = candidate;
+                    acceptsContext = false;
+                    return null;
+                }
+                if (parameters.Length == 1 && parameters[0].ParameterType == typeof(UnictlBuildContext))
+                {
+                    method = candidate;
+                    acceptsContext = true;
+                    return null;
+                }
+            }
+
+            return $"Custom build method not found or has unsupported signature: '{fullName}'. Expected public static void Method() or Method(UnictlBuildContext).";
         }
 
         // ---------------------------------
@@ -504,6 +800,9 @@ namespace Unictl.Internal
         public int TimeoutSec { get; set; }
         public string LogLevel { get; set; } = "info";
         public string JobId { get; set; }
+        public string CustomMethod { get; set; }
+        public JObject MethodParams { get; set; }
+        public int MinExpectedDurationMs { get; set; } = 5000;
 
         public class BuildOptionsParams
         {
@@ -526,6 +825,9 @@ namespace Unictl.Internal
                 TimeoutSec = parameters["timeout_sec"]?.ToObject<int>() ?? 0,
                 LogLevel = parameters["log_level"]?.ToString() ?? "info",
                 JobId = parameters["job_id"]?.ToString(),
+                CustomMethod = parameters["custom_method"]?.ToString(),
+                MethodParams = parameters["method_params"] as JObject,
+                MinExpectedDurationMs = parameters["min_expected_duration_ms"]?.ToObject<int>() ?? 5000,
             };
 
             var scenesToken = parameters["scenes"];
@@ -581,6 +883,8 @@ namespace Unictl.Internal
                 ["timeout_sec"] = TimeoutSec,
                 ["log_level"] = LogLevel,
                 ["job_id"] = JobId,
+                ["custom_method"] = CustomMethod,
+                ["min_expected_duration_ms"] = MinExpectedDurationMs,
             };
 
             if (Scenes != null)
@@ -631,6 +935,22 @@ namespace Unictl.Internal
                         redactedEnv[prop.Name] = prop.Value;
                 }
                 obj["env"] = redactedEnv;
+            }
+
+            if (MethodParams != null)
+            {
+                var redactedParams = new JObject();
+                foreach (var prop in MethodParams.Properties())
+                {
+                    if (IsSensitiveKey(prop.Name))
+                    {
+                        redactedParams[prop.Name] = "[REDACTED]";
+                        redactedFields.Add($"/method_params/{prop.Name}");
+                    }
+                    else
+                        redactedParams[prop.Name] = prop.Value;
+                }
+                obj["method_params"] = redactedParams;
             }
 
             obj["redacted_fields"] = redactedFields;

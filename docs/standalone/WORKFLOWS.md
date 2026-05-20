@@ -117,6 +117,45 @@ unictl build \
 > Note: `--build-profile` is incompatible with `--force-ipc`. Batchmode is required because
 > BuildProfile assets are resolved by the Unity build pipeline outside of editor play-state.
 
+## Custom project build methods
+
+Projects can expose a static Editor build method and invoke it through the same
+build lifecycle contract:
+
+```bash
+unictl build \
+  --method MyProject.Builds.ReleaseBuild.Android \
+  --method-param channel=release \
+  --wait \
+  --project /abs/path/to/project
+```
+
+Supported method signatures:
+
+```csharp
+public static void Android()
+public static void Android(UnictlBuildContext ctx)
+```
+
+Prefer the context/scope form for high-confidence status:
+
+```csharp
+using Unictl.Editor.Builds;
+
+public static void Android(UnictlBuildContext ctx)
+{
+    using var build = ctx.Begin("android_release");
+    build.Progress("collecting_settings");
+    var report = BuildPipeline.BuildPlayer(options);
+    build.Complete(report);
+}
+```
+
+If a custom method returns without a terminal scope report, unictl still marks
+the call lifecycle as terminal but lowers `result_confidence`, records
+`method_elapsed_ms`, and returns `recommended_action.kind =
+inspect_custom_build_method`.
+
 ## Cancel a queued build
 
 `build_cancel` performs a cooperative cancellation at the queue stage. A build already running

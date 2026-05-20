@@ -47,6 +47,52 @@ function parseBuildCompanionArgs(rawArgs: string[]): { project?: string; jobId?:
   return { project, jobId };
 }
 
+function parseMethodParams(rawArgs: string[]): Record<string, string> {
+  const params: Record<string, string> = {};
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+    let value: string | undefined;
+    if (arg === "--method-param" || arg === "--methodParam") {
+      value = rawArgs[++i];
+    } else if (arg.startsWith("--method-param=")) {
+      value = arg.slice("--method-param=".length);
+    } else if (arg.startsWith("--methodParam=")) {
+      value = arg.slice("--methodParam=".length);
+    }
+    if (!value) continue;
+    const eq = value.indexOf("=");
+    if (eq <= 0) {
+      errorExit(2, "invalid_param", `--method-param must be key=value: '${value}'`, "unictl build --method Namespace.Type.Method --method-param channel=release");
+    }
+    params[value.slice(0, eq)] = value.slice(eq + 1);
+  }
+  return params;
+}
+
+function readMethodParamsJson(path: string): Record<string, unknown> {
+  if (!existsSync(path)) {
+    errorExit(2, "invalid_param", `--method-params-json file not found: ${path}`);
+  }
+  let parsed: unknown;
+  try {
+    const raw = readFileSync(path, "utf-8").replace(/^﻿/, "");
+    parsed = JSON.parse(raw) as unknown;
+  } catch (err) {
+    errorExit(2, "invalid_param", `Failed to read --method-params-json '${path}': ${(err as Error).message}`);
+  }
+  if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+    errorExit(2, "invalid_param", `--method-params-json must point to a JSON object: ${path}`);
+  }
+  return parsed as Record<string, unknown>;
+}
+
+function isUnityProcessForProject(command: string, projectRoot: string): boolean {
+  const normalizedRoot = projectRoot.replace(/\\/g, "/").toLowerCase();
+  const cmdLower = command.replace(/\\/g, "/").toLowerCase();
+  return cmdLower.includes(`-projectpath ${normalizedRoot}`)
+    || cmdLower.includes(`-projectpath "${normalizedRoot}"`);
+}
+
 function readNormalizedBuildStatus(projectRoot: string, jobId: string): Record<string, unknown> {
   const progressPath = join(getBuildsDir(projectRoot), `${jobId}.json`);
   if (!existsSync(progressPath)) {
@@ -212,6 +258,15 @@ function filterLifecycleSummary(obj: Record<string, unknown>, jobId: string): Re
     result_source: obj.result_source,
     result_confidence: obj.result_confidence,
     elapsed_ms: obj.elapsed_ms,
+    custom_method: obj.custom_method,
+    method_elapsed_ms: obj.method_elapsed_ms,
+    context_available: obj.context_available,
+    context_started: obj.context_started,
+    terminal_context_reported: obj.terminal_context_reported,
+    phase: obj.phase,
+    message: obj.message,
+    progress: obj.progress,
+    warnings: obj.warnings,
     suspicious: obj.suspicious,
     suspicion_reasons: obj.suspicion_reasons,
     recommended_action: obj.recommended_action,
@@ -272,15 +327,23 @@ EXIT CODES:
     batch: { type: "boolean", default: false, description: "Force batchmode lane (errors if editor running)" },
     forceIpc: { type: "boolean", default: false, description: "Force IPC lane even when editor is flagged (see lane routing notes)" },
     jobId: { type: "string", description: "Override auto-generated job_id" },
+    method: { type: "string", description: "Project static build method to invoke, e.g. Namespace.Type.Method" },
+    methodParam: { type: "string", description: "Custom build method parameter as key=value; repeatable in raw CLI usage" },
+    methodParamsJson: { type: "string", description: "Path to a JSON object with custom build method parameters" },
+    minExpectedDurationMs: { type: "string", default: "5000", description: "Mark custom method results suspicious if no terminal context report and elapsed time is below this threshold; 0 disables" },
     project: { type: "string", description: "Unity project path (auto-detected if omitted)" },
   },
-  run: async ({ args }) => {
+  run: async ({ args, rawArgs }) => {
     // 1. 프로젝트 루트 결정
     const { projectRoot } = getProjectPaths(args.project);
 
     // 2. BuildParams 구성
     const jobId = args.jobId ?? crypto.randomUUID().replace(/-/g, "");
     const timeoutSec = parseInt(args.timeout ?? "0", 10) || 0;
+    const minExpectedDurationMs = parseInt(args.minExpectedDurationMs ?? "5000", 10);
+    if (Number.isNaN(minExpectedDurationMs) || minExpectedDurationMs < 0) {
+      errorExit(2, "invalid_param", "--min-expected-duration-ms must be a non-negative integer", "unictl build --method Namespace.Type.Method --min-expected-duration-ms 5000");
+    }
 
     // --build-profile 유효성 검사
     let resolvedBuildProfile: string | undefined;
@@ -358,6 +421,15 @@ EXIT CODES:
     if (args.scenes) buildParams.scenes = args.scenes;
     if (args.define) buildParams.define_symbols = args.define;
     if (resolvedBuildProfile) buildParams.build_profile = resolvedBuildProfile;
+    if (args.method) {
+      buildParams.custom_method = args.method;
+      buildParams.min_expected_duration_ms = minExpectedDurationMs;
+      const methodParams = {
+        ...(args.methodParamsJson ? readMethodParamsJson(args.methodParamsJson) : {}),
+        ...parseMethodParams(rawArgs),
+      };
+      if (Object.keys(methodParams).length > 0) buildParams.method_params = methodParams;
+    }
     if (args.development || args.allowDebugging) {
       buildParams.options = {
         development: args.development ?? false,
@@ -391,7 +463,7 @@ EXIT CODES:
 
     // 다중 인스턴스 감지 (batchmode worker 제외)
     const allUnity = listUnityProcesses();
-    const editorProcesses = allUnity.filter((p) => !isBatchModeWorker(p.command));
+    const editorProcesses = allUnity.filter((p) => !isBatchModeWorker(p.command) && isUnityProcessForProject(p.command, projectRoot));
     if (editorProcesses.length > 1) {
       const pids = editorProcesses.map((p) => p.pid).join(", ");
       errorExit(

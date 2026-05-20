@@ -32,6 +32,11 @@ not be the richer path for common agent workflows:
   `Library/unictl-builds/<job_id>.json` directly or calling raw
   `build_status`/`build_cancel`. Build output uses normalized lifecycle states:
   `queued`, `running`, `succeeded`, `failed`, `cancelled`.
+- For project-specific build scripts, prefer `unictl build --method
+  Namespace.Type.Method` and the public `UnictlBuildContext` scope pattern.
+  If a custom method returns `result_confidence=low` or `suspicious=true`,
+  follow `recommended_action.kind=inspect_custom_build_method` before trusting
+  stale artifacts.
 - Prefer `unictl test` over raw `unictl command test_run`.
 - Prefer `unictl command editor_log -p action=tail|search|errors` over
   deprecated `game_logs`. Project-scoped `editor_log` is reliable only when the
