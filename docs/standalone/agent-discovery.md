@@ -46,6 +46,10 @@ not be the richer path for common agent workflows:
   editor session was started through `unictl editor open` or `unictl editor
   restart`; otherwise it returns structured failure details such as
   `requires_editor_restart=true` instead of silently reading stale data.
+- If the Unity IPC round-trip for `editor_log` fails but
+  `Library/unictl-state/editor-current.log` exists, the CLI reads that file
+  directly and marks `data.fallback_kind=cli_project_log_file`. Treat that as
+  a log-read fallback, not proof that the editor itself is dead.
 - Use `unictl command editor_log -p action=tail --format text` only when a
   shell pipeline needs raw log lines. Keep the default JSON output for
   structured automation.

@@ -20,6 +20,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
   preserve the original `started_at`, emit ISO `finished_at`, and avoid
   Windows read/write races that could leave `unictl build --wait` stuck in
   `running`.
+- Added a CLI file fallback for `editor_log` so transient IPC failures can still
+  return `Library/unictl-state/editor-current.log` data with
+  `fallback_kind=cli_project_log_file` instead of only surfacing a generic pipe
+  reachability error.
 
 ---
 

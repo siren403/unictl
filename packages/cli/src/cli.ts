@@ -8,6 +8,7 @@ import { lookupHintCommand } from "./error";
 import { buildCmd, runBuildCancelCli, runBuildStatusCli } from "./build";
 import { runCompile } from "./compile";
 import { runTestWaitCli, testCmd } from "./test";
+import { runEditorLogFileFallback } from "./editor-log-fallback";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
 import { v07EditorSubCommands, v07TopLevelCommands } from "./v07-commands";
 import { schemaAll, lookupCommandSchema } from "./schema";
@@ -973,6 +974,9 @@ const commandCmd = defineCommand({
     },
   },
   run: async ({ args, rawArgs }) => {
+    let toolName = args.tool ? String(args.tool) : "list";
+    let params: Record<string, unknown> | undefined;
+    let format = typeof args.format === "string" ? args.format : "json";
     // Legacy compatibility: command contract metadata moved to `unictl schema`.
     // Per-tool metadata still flows through `unictl command list` at runtime.
     if (args.describe === true) {
@@ -984,9 +988,8 @@ const commandCmd = defineCommand({
       }
     }
     try {
-      const toolName = args.tool ? String(args.tool) : "list";
-      const params = await resolveParams(rawArgs);
-      const format = typeof args.format === "string" ? args.format : "json";
+      params = await resolveParams(rawArgs);
+      format = typeof args.format === "string" ? args.format : "json";
       if (format !== "json" && format !== "text") {
         output({ ok: false, error: { kind: "invalid_param", message: `Unknown --format '${format}'. Valid: json, text.` } });
         process.exit(2);
@@ -1019,6 +1022,32 @@ const commandCmd = defineCommand({
         process.exit(1);
       }
     } catch (error) {
+      if (toolName === "editor_log") {
+        try {
+          const fallbackResponse = runEditorLogFileFallback({
+            params,
+            project: args.project,
+            originalError: error,
+          });
+          if (format === "text") {
+            if (!emitEditorLogText(fallbackResponse)) output(fallbackResponse);
+          } else {
+            output(fallbackResponse);
+          }
+          if (
+            fallbackResponse &&
+            typeof fallbackResponse === "object" &&
+            (((fallbackResponse as { success?: unknown }).success === false) ||
+              ((fallbackResponse as { ok?: unknown }).ok === false))
+          ) {
+            process.exit(1);
+          }
+          return;
+        } catch {
+          // If the local file fallback itself cannot run, keep the original IPC
+          // error as the primary signal.
+        }
+      }
       outputErrorAndExit(error);
     }
   },

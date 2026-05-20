@@ -429,7 +429,7 @@ export const commandSchemas: Record<string, CommandSchema> = {
     ],
     examples: [
       { cmd: "unictl command list", intent: "enumerate all [UnictlTool] registrations at runtime (builtin + consumer-defined)" },
-      { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the project-scoped editor log; if the current editor was not started through unictl, inspect data.requires_editor_restart" },
+      { cmd: "unictl command editor_log -p action=errors", intent: "read compile errors / exceptions from the project-scoped editor log; if editor_log IPC fails, the CLI may fall back to Library/unictl-state/editor-current.log with data.fallback_kind=cli_project_log_file" },
       { cmd: "unictl command editor_control -p action=status", intent: "diagnose editor and CLI/UPM version compatibility without triggering a workflow" },
       { cmd: "unictl command editor_log -p action=tail --format text", intent: "print raw log lines for shell pipelines such as grep, tail, or wc" },
       { cmd: "unictl command capture_ui -p mode=screenshot", intent: "invoke a builtin without a v0.7 verb-noun host" },
