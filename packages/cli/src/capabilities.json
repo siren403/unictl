@@ -12,7 +12,25 @@
         "--batch",
         "--wait"
       ],
-      "help": "unictl build --help"
+      "help": "unictl build --help",
+      "schema": "unictl schema build",
+      "lifecycle_states": [
+        "queued",
+        "running",
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "terminal_states": [
+        "succeeded",
+        "failed",
+        "cancelled"
+      ],
+      "notes": [
+        "`unictl build --wait` streams normalized lifecycle JSON; do not parse raw progress-file states such as done or aborted.",
+        "Trigger responses include job_id, status_command, cancel_command, poll_interval_ms, and terminal_states.",
+        "Successful low-confidence custom build results may still exit 0 but include suspicious=true and recommended_action."
+      ]
     },
     {
       "name": "compile",
@@ -523,6 +541,17 @@
         "build_status",
         "build_cancel"
       ],
+      "response_fields": [
+        "job_id",
+        "state",
+        "terminal",
+        "progress_file",
+        "lane",
+        "status_command",
+        "cancel_command",
+        "poll_interval_ms",
+        "terminal_states"
+      ],
       "emits_error_kinds": [
         "invalid_param",
         "target_unsupported",
@@ -545,6 +574,22 @@
       "companions": [
         "build_project",
         "build_cancel"
+      ],
+      "response_fields": [
+        "job_id",
+        "state",
+        "raw_state",
+        "terminal",
+        "terminal_states",
+        "result_source",
+        "result_confidence",
+        "elapsed_ms",
+        "warnings",
+        "suspicion_reasons",
+        "suspicious",
+        "recommended_action",
+        "report_summary",
+        "error"
       ],
       "emits_error_kinds": [
         "job_not_found",

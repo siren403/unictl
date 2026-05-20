@@ -21,7 +21,7 @@ unictl editor open --project /abs/path/to/project
 unictl command list --project /abs/path/to/project
 
 # 6. Trigger a build
-unictl command build_project -p target=StandaloneWindows64 --project /abs/path/to/project
+unictl build --target StandaloneWindows64 --wait --project /abs/path/to/project
 ```
 
 `init` is a manifest edit, not an editor-side command. Before `com.unictl.editor` has been
@@ -96,10 +96,10 @@ Override the automatic selection when needed:
 
 ```bash
 # Force IPC even if editor detection is ambiguous
-unictl command build_project -p target=StandaloneWindows64 --force-ipc --project /abs/path/to/project
+unictl build --target StandaloneWindows64 --force-ipc --project /abs/path/to/project
 
 # Force batchmode (e.g. CI environment)
-unictl command build_project -p target=StandaloneWindows64 --batch --project /abs/path/to/project
+unictl build --target StandaloneWindows64 --batch --project /abs/path/to/project
 ```
 
 ## Build profiles (Unity 6+)
@@ -107,7 +107,8 @@ unictl command build_project -p target=StandaloneWindows64 --batch --project /ab
 `BuildProfile` assets are supported in Unity 6000.0+ and require batchmode:
 
 ```bash
-unictl command build_project \
+unictl build \
+  --target StandaloneWindows64 \
   --build-profile Assets/Settings/Profiles/Release.asset \
   --batch \
   --project /abs/path/to/project
@@ -128,14 +129,17 @@ unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
 
 ## Status polling
 
-Poll `build_status` until the job reaches a terminal state (`succeeded`, `failed`, `cancelled`):
+`unictl build --wait` streams normalized lifecycle states. When using
+`--no-wait`, poll the returned `status_command` until `terminal=true` and
+`state` is one of `succeeded`, `failed`, or `cancelled`:
 
 ```bash
 unictl command build_status -p job_id=<id> --project /abs/path/to/project
 ```
 
-Response fields include `state`, `exit_code`, and `error` (when failed). In CI, poll on a
-fixed interval (e.g. every 5 seconds) rather than tight-looping.
+Response fields include `state`, `raw_state`, `terminal`, `result_source`,
+`result_confidence`, `elapsed_ms`, `report_summary`, and `error` when failed.
+In CI, poll on a fixed interval (e.g. every 5 seconds) rather than tight-looping.
 
 ## Headless compile
 

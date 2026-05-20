@@ -27,6 +27,9 @@ not be the richer path for common agent workflows:
 
 - Prefer `unictl editor status` over `unictl command editor_control -p action=status`.
 - Prefer `unictl wait <state>` over ad-hoc `editor_control` polling.
+- Prefer `unictl build --wait` and `unictl schema build` over reading
+  `Library/unictl-builds/<job_id>.json` directly. Build output uses normalized
+  lifecycle states: `queued`, `running`, `succeeded`, `failed`, `cancelled`.
 - Prefer `unictl test` over raw `unictl command test_run`.
 - Prefer `unictl command editor_log -p action=tail|search|errors` over
   deprecated `game_logs`. Project-scoped `editor_log` is reliable only when the

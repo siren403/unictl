@@ -118,8 +118,13 @@ namespace Unictl.Builtins
                 {
                     job_id = p.JobId,
                     state = "queued",
+                    terminal = false,
                     progress_file = $"Library/unictl-builds/{p.JobId}.json",
                     lane = "ipc",
+                    status_command = $"unictl command build_status -p job_id={p.JobId}",
+                    cancel_command = $"unictl command build_cancel -p job_id={p.JobId}",
+                    poll_interval_ms = 500,
+                    terminal_states = new[] { "succeeded", "failed", "cancelled" },
                     hint = $"Poll with: unictl command build_status -p job_id={p.JobId}",
                 });
         }

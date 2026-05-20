@@ -5,6 +5,7 @@ import { getProjectPaths } from "./socket";
 import { getUnityPid, listUnityProcesses, isBatchModeWorker, readUnityVersion, resolveUnityBinary, getUnityLockfilePath } from "./process";
 import { command } from "./client";
 import { errorExit } from "./error";
+import { normalizeBuildProgress } from "./build-lifecycle";
 
 // ---------------------------------------------------------------------------
 // Library/unictl-builds helpers
@@ -72,17 +73,17 @@ async function pollUntilTerminal(
 
     try {
       const raw = readFileSync(progressPath, "utf-8").replace(/^﻿/, "");
-      const obj = JSON.parse(raw) as Record<string, unknown>;
+      const obj = normalizeBuildProgress(JSON.parse(raw) as Record<string, unknown>, jobId);
       const state = obj.state as string;
 
       // 상태 변경 시에만 출력
       if (state !== lastState) {
-        process.stdout.write(JSON.stringify({ job_id: jobId, state, ...filterSummary(obj) }) + "\n");
+        process.stdout.write(JSON.stringify(filterLifecycleSummary(obj, jobId)) + "\n");
         lastState = state;
       }
 
-      if (state === "done") process.exit(0);
-      if (state === "failed" || state === "aborted") {
+      if (state === "succeeded") process.exit(0);
+      if (state === "failed" || state === "cancelled") {
         process.exit(1);
       }
     } catch {
@@ -93,11 +94,25 @@ async function pollUntilTerminal(
   }
 }
 
-/** done/failed 시 report_summary + error 필드만 추출 */
-function filterSummary(obj: Record<string, unknown>): Record<string, unknown> {
-  const out: Record<string, unknown> = {};
+/** Agent-facing lifecycle fields emitted by build wait/status streams. */
+function filterLifecycleSummary(obj: Record<string, unknown>, jobId: string): Record<string, unknown> {
+  const out: Record<string, unknown> = {
+    job_id: obj.job_id ?? jobId,
+    state: obj.state,
+    terminal: obj.terminal,
+    raw_state: obj.raw_state,
+    result_source: obj.result_source,
+    result_confidence: obj.result_confidence,
+    elapsed_ms: obj.elapsed_ms,
+    suspicious: obj.suspicious,
+    suspicion_reasons: obj.suspicion_reasons,
+    recommended_action: obj.recommended_action,
+  };
   if (obj.report_summary) out.report_summary = obj.report_summary;
   if (obj.error) out.error = obj.error;
+  for (const key of Object.keys(out)) {
+    if (out[key] === undefined || out[key] === null) delete out[key];
+  }
   return out;
 }
 
@@ -391,10 +406,16 @@ EXIT CODES:
         JSON.stringify({
           ok: true,
           job_id: jobId,
+          state: "queued",
+          terminal: false,
           lane: "batch",
           progress_file: join(buildsDir, `${jobId}.json`),
           log_file: logPath,
           pid: proc.pid,
+          status_command: `unictl command build_status -p job_id=${jobId}`,
+          cancel_command: `unictl command build_cancel -p job_id=${jobId}`,
+          poll_interval_ms: 500,
+          terminal_states: ["succeeded", "failed", "cancelled"],
         }) + "\n"
       );
       return;
@@ -410,10 +431,10 @@ EXIT CODES:
     const pollInterval = setInterval(() => {
       if (!existsSync(progressPath)) return;
       try {
-        const obj = JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, "")) as Record<string, unknown>;
+        const obj = normalizeBuildProgress(JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, "")) as Record<string, unknown>, jobId);
         const state = obj.state as string;
         if (state !== lastState) {
-          process.stdout.write(JSON.stringify({ job_id: jobId, state, ...filterSummary(obj) }) + "\n");
+          process.stdout.write(JSON.stringify(filterLifecycleSummary(obj, jobId)) + "\n");
           lastState = state;
         }
       } catch {
@@ -442,12 +463,12 @@ EXIT CODES:
 
     // 최종 progress file 읽기
     if (existsSync(progressPath)) {
-      const final = JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, "")) as Record<string, unknown>;
+      const final = normalizeBuildProgress(JSON.parse(readFileSync(progressPath, "utf-8").replace(/^﻿/, "")) as Record<string, unknown>, jobId);
       // 마지막 상태가 아직 출력 안 됐으면 출력
       if ((final.state as string) !== lastState) {
-        process.stdout.write(JSON.stringify({ job_id: jobId, state: final.state, ...filterSummary(final) }) + "\n");
+        process.stdout.write(JSON.stringify(filterLifecycleSummary(final, jobId)) + "\n");
       }
-      process.exit(final.state === "done" ? 0 : 1);
+      process.exit(final.state === "succeeded" ? 0 : 1);
     } else {
       // Unity가 progress file 작성 전에 종료 — 빌드 경로에 진입하지 못함
       process.stderr.write(JSON.stringify({

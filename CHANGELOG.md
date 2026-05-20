@@ -16,11 +16,16 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - Added the live-editor `hierarchy_tree` builtin tool for agent path discovery.
   It lists loaded scene roots and Play Mode `DontDestroyOnLoad` roots, with
   depth, component, name, and payload-limit filters.
+- Added `unictl schema build` and build lifecycle metadata for agent
+  discovery.
 
 ### Fixed
 
 - `editor_log` now reports unknown parameters, valid parameter names, and valid
   actions when callers omit or misspell the required `action` parameter.
+- `unictl build --wait` and `build_status` now expose normalized lifecycle
+  fields (`queued`, `running`, `succeeded`, `failed`, `cancelled`) instead of
+  requiring agents to interpret raw progress-file states.
 
 ---
 

@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 using System.Threading;
 using Newtonsoft.Json;
@@ -75,7 +76,7 @@ namespace Unictl.Builtins
                 {
                     var content = File.ReadAllText(progressPath);
                     var json = JObject.Parse(content);
-                    return new SuccessResponse($"Build status for job {jobId}", json);
+                    return new SuccessResponse($"Build status for job {jobId}", NormalizeLifecycle(json, jobId));
                 }
                 catch (IOException ex) { lastEx = ex; }
                 catch (JsonException ex) { lastEx = ex; }
@@ -90,6 +91,106 @@ namespace Unictl.Builtins
                     job_id = jobId,
                     path = progressPath,
                 });
+        }
+
+        static JObject NormalizeLifecycle(JObject json, string fallbackJobId)
+        {
+            var rawState = json["state"]?.ToString() ?? "";
+            var state = NormalizeState(rawState);
+            var terminal = state == "succeeded" || state == "failed" || state == "cancelled";
+
+            if (json["job_id"] == null)
+                json["job_id"] = fallbackJobId;
+            if (!string.IsNullOrEmpty(rawState))
+                json["raw_state"] = rawState;
+            json["state"] = state;
+            json["terminal"] = terminal;
+            json["terminal_states"] = new JArray("succeeded", "failed", "cancelled");
+            json["result_source"] = json["result_source"] ?? InferResultSource(state, json);
+            json["result_confidence"] = json["result_confidence"] ?? InferResultConfidence(state, json);
+            if (json["warnings"] == null)
+                json["warnings"] = new JArray();
+            if (json["suspicion_reasons"] == null)
+                json["suspicion_reasons"] = new JArray();
+            if (json["suspicious"] == null)
+                json["suspicious"] = false;
+            if (json["recommended_action"] == null)
+                json["recommended_action"] = JValue.CreateNull();
+
+            var elapsed = ComputeElapsedMs(json["started_at"]?.ToString(), json["finished_at"]?.ToString(), terminal);
+            if (elapsed.HasValue)
+                json["elapsed_ms"] = elapsed.Value;
+
+            return json;
+        }
+
+        static string NormalizeState(string rawState)
+        {
+            switch ((rawState ?? "").ToLowerInvariant())
+            {
+                case "queued":
+                    return "queued";
+                case "running":
+                case "started":
+                    return "running";
+                case "done":
+                case "succeeded":
+                case "success":
+                    return "succeeded";
+                case "failed":
+                case "failure":
+                    return "failed";
+                case "aborted":
+                case "cancelled":
+                case "canceled":
+                    return "cancelled";
+                default:
+                    return "unknown";
+            }
+        }
+
+        static JToken InferResultSource(string state, JObject json)
+        {
+            if (state == "succeeded" && json["report_summary"] != null)
+                return "unity_build_report";
+            if (state == "failed" && json["error"] != null)
+                return "unity_build_report";
+            if (state == "cancelled")
+                return "build_cancel";
+            if (state == "failed")
+                return "progress_file";
+            return JValue.CreateNull();
+        }
+
+        static JToken InferResultConfidence(string state, JObject json)
+        {
+            if (state == "succeeded" && json["report_summary"] != null)
+                return "high";
+            if (state == "failed" || state == "cancelled")
+                return "high";
+            return JValue.CreateNull();
+        }
+
+        static long? ComputeElapsedMs(string startedAt, string finishedAt, bool terminal)
+        {
+            if (string.IsNullOrEmpty(startedAt))
+                return null;
+            DateTime start;
+            if (!DateTime.TryParse(startedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out start))
+                return null;
+            DateTime end;
+            if (!string.IsNullOrEmpty(finishedAt))
+            {
+                if (!DateTime.TryParse(finishedAt, null, System.Globalization.DateTimeStyles.RoundtripKind, out end))
+                    return null;
+            }
+            else
+            {
+                if (terminal)
+                    return null;
+                end = DateTime.UtcNow;
+            }
+            return Math.Max(0, (long)(end.ToUniversalTime() - start.ToUniversalTime()).TotalMilliseconds);
         }
     }
 }
