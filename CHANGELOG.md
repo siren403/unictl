@@ -16,6 +16,10 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - Clarified `unictl build --method` custom build reporting guidance across
   help, schema, capabilities, and workflows so project wrappers map
   `BuildReport` success/failure to `UnictlBuildContext` terminal reports.
+- Fixed build lifecycle progress writes so terminal custom-method reports
+  preserve the original `started_at`, emit ISO `finished_at`, and avoid
+  Windows read/write races that could leave `unictl build --wait` stuck in
+  `running`.
 
 ---
 

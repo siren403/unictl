@@ -6,6 +6,8 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Text.RegularExpressions;
+using System.Threading;
+using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
 using Unictl.Editor.Builds;
 using UnityEditor;
@@ -308,6 +310,12 @@ namespace Unictl.Internal
         {
             try
             {
+                var dir = GetBuildsDir();
+                Directory.CreateDirectory(dir);
+                var path = Path.Combine(dir, $"{jobId}.json");
+                var now = DateTime.UtcNow.ToString("o");
+                var startedAt = ReadExistingStartedAt(path) ?? now;
+                var terminal = state == State.Done || state == State.Failed || state == State.Aborted;
                 var progress = new JObject
                 {
                     ["schema_version"] = 1,
@@ -315,13 +323,15 @@ namespace Unictl.Internal
                     ["owner_pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
                     ["lane"] = Application.isBatchMode ? "batch" : "ipc",
                     ["state"] = state.ToString().ToLower(),
-                    ["started_at"] = DateTime.UtcNow.ToString("o"),
+                    ["started_at"] = startedAt,
                     ["params_echo"] = p?.ToRedactedEcho(),
                 };
 
+                if (terminal)
+                    progress["finished_at"] = now;
+
                 if (summary.HasValue)
                 {
-                    progress["finished_at"] = DateTime.UtcNow.ToString("o");
                     var reportSummary = new JObject
                     {
                         ["result"] = summary.Value.result.ToString(),
@@ -351,13 +361,7 @@ namespace Unictl.Internal
                     };
                 }
 
-                var dir = GetBuildsDir();
-                Directory.CreateDirectory(dir);
-                var path = Path.Combine(dir, $"{jobId}.json");
-                var tmp = path + ".tmp";
-                File.WriteAllText(tmp, progress.ToString(), Encoding.UTF8);
-                if (File.Exists(path)) File.Replace(tmp, path, null);
-                else File.Move(tmp, path);
+                WriteProgressAtomic(path, progress);
             }
             catch (Exception ex)
             {
@@ -501,6 +505,9 @@ namespace Unictl.Internal
         {
             var terminal = state == State.Done || state == State.Failed || state == State.Aborted;
             var suspicious = suspicionReasons != null && suspicionReasons.Count > 0;
+            var path = Path.Combine(GetBuildsDir(), $"{jobId}.json");
+            var now = DateTime.UtcNow.ToString("o");
+            var startedAt = ReadExistingStartedAt(path) ?? now;
             var progress = new JObject
             {
                 ["schema_version"] = 1,
@@ -508,7 +515,7 @@ namespace Unictl.Internal
                 ["owner_pid"] = System.Diagnostics.Process.GetCurrentProcess().Id,
                 ["lane"] = Application.isBatchMode ? "batch" : "ipc",
                 ["state"] = state.ToString().ToLower(),
-                ["started_at"] = DateTime.UtcNow.ToString("o"),
+                ["started_at"] = startedAt,
                 ["params_echo"] = p?.ToRedactedEcho(),
                 ["custom_method"] = p?.CustomMethod,
                 ["method_elapsed_ms"] = methodElapsedMs,
@@ -527,7 +534,7 @@ namespace Unictl.Internal
             if (percent.HasValue)
                 progress["progress"] = percent.Value;
             if (terminal)
-                progress["finished_at"] = DateTime.UtcNow.ToString("o");
+                progress["finished_at"] = now;
             if (!string.IsNullOrEmpty(resultSource))
                 progress["result_source"] = resultSource;
             if (!string.IsNullOrEmpty(resultConfidence))
@@ -567,8 +574,28 @@ namespace Unictl.Internal
                 };
             }
 
-            var path = Path.Combine(GetBuildsDir(), $"{jobId}.json");
             WriteProgressAtomic(path, progress);
+        }
+
+        static string ReadExistingStartedAt(string path)
+        {
+            try
+            {
+                if (!File.Exists(path))
+                    return null;
+                var content = File.ReadAllText(path, Encoding.UTF8);
+                using (var reader = new JsonTextReader(new StringReader(content)))
+                {
+                    reader.DateParseHandling = DateParseHandling.None;
+                    var existing = JObject.Load(reader);
+                    var startedAt = existing["started_at"]?.ToString();
+                    return string.IsNullOrWhiteSpace(startedAt) ? null : startedAt;
+                }
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         static JObject BuildInspectRecommendedAction() => new JObject
@@ -766,18 +793,36 @@ namespace Unictl.Internal
         /// <summary>진행 파일을 tmp 경유 원자적으로 덮어쓰기.</summary>
         static void WriteProgressAtomic(string path, JObject content)
         {
-            try
+            Exception lastError = null;
+            for (var attempt = 0; attempt < 5; attempt++)
             {
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                var tmp = path + ".tmp";
-                File.WriteAllText(tmp, content.ToString(), Encoding.UTF8);
-                if (File.Exists(path)) File.Replace(tmp, path, null);
-                else File.Move(tmp, path);
+                var tmp = $"{path}.{Guid.NewGuid():N}.tmp";
+                try
+                {
+                    Directory.CreateDirectory(Path.GetDirectoryName(path));
+                    File.WriteAllText(tmp, content.ToString(), Encoding.UTF8);
+                    if (File.Exists(path)) File.Replace(tmp, path, null);
+                    else File.Move(tmp, path);
+                    return;
+                }
+                catch (Exception ex)
+                {
+                    lastError = ex;
+                    try
+                    {
+                        if (File.Exists(tmp))
+                            File.Delete(tmp);
+                    }
+                    catch
+                    {
+                        // Best effort cleanup; the next attempt uses a unique temp file.
+                    }
+
+                    Thread.Sleep(25 * (attempt + 1));
+                }
             }
-            catch (Exception ex)
-            {
-                Debug.LogWarning($"[unictl] WriteProgressAtomic failed for {path}: {ex.Message}");
-            }
+
+            Debug.LogWarning($"[unictl] WriteProgressAtomic failed for {path}: {lastError?.Message}");
         }
 
         /// <summary>BOM(U+FEFF) 제거 — File.ReadAllText가 BOM을 남기는 경우 대비.</summary>
