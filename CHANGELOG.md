@@ -11,6 +11,14 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.11] - 2026-05-20
+
+---
+
+## [0.7.11] - 2026-05-20
+
 ### Added
 
 - Added the live-editor `hierarchy_tree` builtin tool for agent path discovery.
