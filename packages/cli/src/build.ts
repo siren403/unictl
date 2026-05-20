@@ -29,6 +29,114 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+function parseBuildCompanionArgs(rawArgs: string[]): { project?: string; jobId?: string } {
+  let project: string | undefined;
+  let jobId: string | undefined;
+
+  for (let i = 0; i < rawArgs.length; i++) {
+    const arg = rawArgs[i];
+    if (arg === "--project") {
+      project = rawArgs[++i];
+    } else if (arg === "--job-id" || arg === "--jobId") {
+      jobId = rawArgs[++i];
+    } else if (!arg.startsWith("-") && !jobId) {
+      jobId = arg;
+    }
+  }
+
+  return { project, jobId };
+}
+
+function readNormalizedBuildStatus(projectRoot: string, jobId: string): Record<string, unknown> {
+  const progressPath = join(getBuildsDir(projectRoot), `${jobId}.json`);
+  if (!existsSync(progressPath)) {
+    errorExit(
+      2,
+      "job_not_found",
+      `No progress file for job: ${jobId}`,
+      `Verify the id returned by unictl build, or poll with: unictl build status --job-id ${jobId}`
+    );
+  }
+
+  try {
+    const raw = readFileSync(progressPath, "utf-8").replace(/^﻿/, "");
+    return normalizeBuildProgress(JSON.parse(raw) as Record<string, unknown>, jobId);
+  } catch (err) {
+    errorExit(
+      125,
+      "progress_read_failed",
+      `Failed to read progress file for job ${jobId}: ${(err as Error).message}`,
+      `Retry: unictl build status --job-id ${jobId}`
+    );
+  }
+}
+
+export async function runBuildStatusCli(rawArgs: string[]): Promise<void> {
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    process.stdout.write(`Usage: unictl build status --job-id <id> [--project <path>]
+
+Read a build lifecycle status using the first-class build workflow.
+Returns normalized states: queued, running, succeeded, failed, cancelled.
+`);
+    process.exit(0);
+  }
+
+  const { project, jobId } = parseBuildCompanionArgs(rawArgs);
+  if (!jobId) {
+    errorExit(2, "invalid_param", "--job-id is required", "unictl build status --job-id <id> --project <path>");
+  }
+
+  const { projectRoot } = getProjectPaths(project);
+  process.stdout.write(JSON.stringify(readNormalizedBuildStatus(projectRoot, jobId)) + "\n");
+  process.exit(0);
+}
+
+export async function runBuildCancelCli(rawArgs: string[]): Promise<void> {
+  if (rawArgs.includes("--help") || rawArgs.includes("-h")) {
+    process.stdout.write(`Usage: unictl build cancel --job-id <id> [--project <path>]
+
+Request cooperative cancellation for a queued build.
+Running Unity BuildPipeline builds cannot be interrupted safely.
+`);
+    process.exit(0);
+  }
+
+  const { project, jobId } = parseBuildCompanionArgs(rawArgs);
+  if (!jobId) {
+    errorExit(2, "invalid_param", "--job-id is required", "unictl build cancel --job-id <id> --project <path>");
+  }
+
+  const { projectRoot } = getProjectPaths(project);
+  const pid = await getUnityPid(projectRoot);
+  if (pid === null) {
+    errorExit(
+      3,
+      "editor_not_running",
+      "Build cancellation requires a reachable editor IPC session. Batchmode/running BuildPipeline jobs cannot be cancelled through unictl.",
+      `Check status instead: unictl build status --job-id ${jobId}`
+    );
+  }
+
+  let result: unknown;
+  try {
+    result = await command("build_cancel", { job_id: jobId }, { project: projectRoot });
+  } catch (e: unknown) {
+    const msg = e instanceof Error ? e.message : String(e);
+    errorExit(125, "ipc_error", `IPC call failed: ${msg}`);
+  }
+
+  const r = result as Record<string, unknown>;
+  const data = r?.data as Record<string, unknown> | undefined;
+  if (data) {
+    if (typeof data.previous_state === "string") data.previous_state = normalizeBuildProgress({ state: data.previous_state }).state;
+    if (typeof data.new_state === "string") data.new_state = normalizeBuildProgress({ state: data.new_state }).state;
+    data.status_command = `unictl build status --job-id ${jobId}`;
+  }
+  process.stdout.write(JSON.stringify(r) + "\n");
+  if (r && r.success === false) process.exit(1);
+  process.exit(0);
+}
+
 // ---------------------------------------------------------------------------
 // Polling — §2.5 / §2.5.1
 // ---------------------------------------------------------------------------
@@ -63,8 +171,8 @@ async function pollUntilTerminal(
           ok: false,
           error: {
             kind: "timeout",
-            message: `CLI wait timeout reached; build still in progress. Poll with: unictl command build_status -p job_id=${jobId}`,
-            hint: `poll: unictl command build_status -p job_id=${jobId}`,
+            message: `CLI wait timeout reached; build still in progress. Poll with: unictl build status --job-id ${jobId}`,
+            hint: `poll: unictl build status --job-id ${jobId}`,
           },
         }) + "\n"
       );
@@ -412,8 +520,8 @@ EXIT CODES:
           progress_file: join(buildsDir, `${jobId}.json`),
           log_file: logPath,
           pid: proc.pid,
-          status_command: `unictl command build_status -p job_id=${jobId}`,
-          cancel_command: `unictl command build_cancel -p job_id=${jobId}`,
+          status_command: `unictl build status --job-id ${jobId}`,
+          cancel_command: `unictl build cancel --job-id ${jobId}`,
           poll_interval_ms: 500,
           terminal_states: ["succeeded", "failed", "cancelled"],
         }) + "\n"
@@ -450,7 +558,7 @@ EXIT CODES:
         error: {
           kind: "timeout",
           message: `CLI wait timeout (${timeoutSec}s) reached; Unity batch still running (pid=${proc.pid}).`,
-          hint: "poll: unictl command build_status -p job_id=" + jobId,
+          hint: "poll: unictl build status --job-id " + jobId,
         },
       }) + "\n");
       process.exit(124);

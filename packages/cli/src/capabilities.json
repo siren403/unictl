@@ -30,6 +30,28 @@
         "`unictl build --wait` streams normalized lifecycle JSON; do not parse raw progress-file states such as done or aborted.",
         "Trigger responses include job_id, status_command, cancel_command, poll_interval_ms, and terminal_states.",
         "Successful low-confidence custom build results may still exit 0 but include suspicious=true and recommended_action."
+      ],
+      "subcommands": [
+        {
+          "name": "status",
+          "description": "Read normalized lifecycle status for an existing build job.",
+          "key_flags": [
+            "--job-id",
+            "--project"
+          ],
+          "help": "unictl build status --help",
+          "schema": "unictl schema build.status"
+        },
+        {
+          "name": "cancel",
+          "description": "Request cooperative cancellation for a queued build job.",
+          "key_flags": [
+            "--job-id",
+            "--project"
+          ],
+          "help": "unictl build cancel --help",
+          "schema": "unictl schema build.cancel"
+        }
       ]
     },
     {

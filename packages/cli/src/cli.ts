@@ -5,7 +5,7 @@ import caps from "./capabilities.json" assert { type: "json" };
 import { command, health } from "./client";
 import { formatHelpJson } from "./help-json";
 import { lookupHintCommand } from "./error";
-import { buildCmd } from "./build";
+import { buildCmd, runBuildCancelCli, runBuildStatusCli } from "./build";
 import { runCompile } from "./compile";
 import { runTestWaitCli, testCmd } from "./test";
 import { editorStatus, editorQuit, editorOpen, editorRestart } from "./editor";
@@ -1213,6 +1213,14 @@ if (rawArgv.includes("--describe")) {
 
 if (rawArgv[0] === "test" && rawArgv[1] === "wait") {
   await runTestWaitCli(normalizeKnownFlags(rawArgv.slice(2)));
+}
+
+if (rawArgv[0] === "build" && rawArgv[1] === "status") {
+  await runBuildStatusCli(normalizeKnownFlags(rawArgv.slice(2)));
+}
+
+if (rawArgv[0] === "build" && rawArgv[1] === "cancel") {
+  await runBuildCancelCli(normalizeKnownFlags(rawArgv.slice(2)));
 }
 
 runMain(main, { rawArgs: normalizeKnownFlags(rawArgv) });

@@ -121,11 +121,11 @@ namespace Unictl.Builtins
                     terminal = false,
                     progress_file = $"Library/unictl-builds/{p.JobId}.json",
                     lane = "ipc",
-                    status_command = $"unictl command build_status -p job_id={p.JobId}",
-                    cancel_command = $"unictl command build_cancel -p job_id={p.JobId}",
+                    status_command = $"unictl build status --job-id {p.JobId}",
+                    cancel_command = $"unictl build cancel --job-id {p.JobId}",
                     poll_interval_ms = 500,
                     terminal_states = new[] { "succeeded", "failed", "cancelled" },
-                    hint = $"Poll with: unictl command build_status -p job_id={p.JobId}",
+                    hint = $"Poll with: unictl build status --job-id {p.JobId}",
                 });
         }
     }

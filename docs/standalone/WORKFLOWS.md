@@ -124,7 +124,7 @@ inside `BuildPipeline.BuildPlayer` cannot be interrupted mid-flight.
 
 ```bash
 # Cancel by job ID returned from build_project
-unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
+unictl build cancel --job-id <id> --project /abs/path/to/project
 ```
 
 ## Status polling
@@ -134,7 +134,7 @@ unictl command build_cancel -p job_id=<id> --project /abs/path/to/project
 `state` is one of `succeeded`, `failed`, or `cancelled`:
 
 ```bash
-unictl command build_status -p job_id=<id> --project /abs/path/to/project
+unictl build status --job-id <id> --project /abs/path/to/project
 ```
 
 Response fields include `state`, `raw_state`, `terminal`, `result_source`,

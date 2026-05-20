@@ -18,6 +18,8 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
   depth, component, name, and payload-limit filters.
 - Added `unictl schema build` and build lifecycle metadata for agent
   discovery.
+- Added first-class `unictl build status --job-id <id>` and
+  `unictl build cancel --job-id <id>` commands.
 
 ### Fixed
 
