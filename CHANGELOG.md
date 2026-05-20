@@ -11,6 +11,12 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- Clarified `unictl build --method` custom build reporting guidance across
+  help, schema, capabilities, and workflows so project wrappers map
+  `BuildReport` success/failure to `UnictlBuildContext` terminal reports.
+
 ---
 
 ## [0.7.11] - 2026-05-20

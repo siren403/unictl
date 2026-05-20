@@ -306,6 +306,12 @@ BUILD PROFILE (Unity 6+ only):
   IPC lane rejects it: profile switch requires a domain reload.
   Path must be relative to project root and end in .asset.
 
+CUSTOM METHODS:
+  Prefer Method(UnictlBuildContext ctx) and wrap BuildPipeline.BuildPlayer with
+  using var build = ctx.Begin(...). Call build.Complete(report) only when
+  report.summary.result == Succeeded; call build.Fail(...) or throw on failure.
+  Plain void Method() is low-confidence unless it throws for every failed build.
+
 EXIT CODES:
   0   success
   1   build failed
@@ -327,7 +333,7 @@ EXIT CODES:
     batch: { type: "boolean", default: false, description: "Force batchmode lane (errors if editor running)" },
     forceIpc: { type: "boolean", default: false, description: "Force IPC lane even when editor is flagged (see lane routing notes)" },
     jobId: { type: "string", description: "Override auto-generated job_id" },
-    method: { type: "string", description: "Project static build method to invoke, e.g. Namespace.Type.Method" },
+    method: { type: "string", description: "Project static build method to invoke, e.g. Namespace.Type.Method. Prefer Method(UnictlBuildContext ctx) and report success/failure through ctx.Begin(...)." },
     methodParam: { type: "string", description: "Custom build method parameter as key=value; repeatable in raw CLI usage" },
     methodParamsJson: { type: "string", description: "Path to a JSON object with custom build method parameters" },
     minExpectedDurationMs: { type: "string", default: "5000", description: "Mark custom method results suspicious if no terminal context report and elapsed time is below this threshold; 0 disables" },

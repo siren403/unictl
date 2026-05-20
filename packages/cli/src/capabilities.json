@@ -31,8 +31,9 @@
       "notes": [
         "`unictl build --wait` streams normalized lifecycle JSON; do not parse raw progress-file states such as done or aborted.",
         "Trigger responses include job_id, status_command, cancel_command, poll_interval_ms, and terminal_states.",
-        "Custom project build methods are invoked with --method Namespace.Type.Method; use UnictlBuildContext and ctx.Begin(...) for high-confidence lifecycle reporting.",
-        "Successful low-confidence custom build results may still exit 0 but include suspicious=true and recommended_action."
+        "Custom project build methods are invoked with --method Namespace.Type.Method; prefer Method(UnictlBuildContext ctx) and use ctx.Begin(...) for high-confidence lifecycle reporting.",
+        "When wrapping BuildPipeline.BuildPlayer, call scope.Complete(report) only when report.summary.result is Succeeded; call scope.Fail(...) or throw on failed/cancelled reports.",
+        "Plain void Method() only proves that the method returned without throwing. Successful low-confidence custom build results may still exit 0 but include suspicious=true and recommended_action."
       ],
       "subcommands": [
         {

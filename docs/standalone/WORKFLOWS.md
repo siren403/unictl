@@ -141,13 +141,18 @@ Prefer the context/scope form for high-confidence status:
 
 ```csharp
 using Unictl.Editor.Builds;
+using UnityEditor.Build.Reporting;
 
 public static void Android(UnictlBuildContext ctx)
 {
     using var build = ctx.Begin("android_release");
     build.Progress("collecting_settings");
-    var report = BuildPipeline.BuildPlayer(options);
-    build.Complete(report);
+    BuildReport report = BuildPipeline.BuildPlayer(options);
+
+    if (report.summary.result == BuildResult.Succeeded)
+        build.Complete(report);
+    else
+        build.Fail("build_failed", $"Build failed: {report.summary.result}, errors={report.summary.totalErrors}");
 }
 ```
 
@@ -155,6 +160,12 @@ If a custom method returns without a terminal scope report, unictl still marks
 the call lifecycle as terminal but lowers `result_confidence`, records
 `method_elapsed_ms`, and returns `recommended_action.kind =
 inspect_custom_build_method`.
+
+Plain `public static void Android()` is only safe when the method throws for
+every failed build path. If the project wrapper logs errors or receives a failed
+`BuildReport` and then returns normally, unictl can only report that the method
+returned without throwing. Use `UnictlBuildContext` when agents or CI need
+reliable success/failure status.
 
 ## Cancel a queued build
 

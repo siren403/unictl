@@ -34,6 +34,9 @@ not be the richer path for common agent workflows:
   `queued`, `running`, `succeeded`, `failed`, `cancelled`.
 - For project-specific build scripts, prefer `unictl build --method
   Namespace.Type.Method` and the public `UnictlBuildContext` scope pattern.
+  Build wrappers should call `scope.Complete(report)` only when
+  `report.summary.result` is succeeded, and should call `scope.Fail(...)` or
+  throw for failed/cancelled `BuildReport` results.
   If a custom method returns `result_confidence=low` or `suspicious=true`,
   follow `recommended_action.kind=inspect_custom_build_method` before trusting
   stale artifacts.
