@@ -17,6 +17,11 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
   It lists loaded scene roots and Play Mode `DontDestroyOnLoad` roots, with
   depth, component, name, and payload-limit filters.
 
+### Fixed
+
+- `editor_log` now reports unknown parameters, valid parameter names, and valid
+  actions when callers omit or misspell the required `action` parameter.
+
 ---
 
 ## [0.7.10] - 2026-05-19

@@ -12,6 +12,9 @@ namespace Unictl.Tools
     [UnictlTool(Name = "editor_log", Description = "Read Unity editor logs from the project-scoped editor log when available. Use tail/search/errors; game_logs is deprecated.")]
     public static class EditorLogTool
     {
+        private static readonly string[] ValidActions = { "tail", "search", "errors", "game_logs", "clear_game_logs" };
+        private static readonly string[] CommonParams = { "action", "lines" };
+        private static readonly string[] SearchParams = { "pattern" };
         private static readonly Regex CompileErrorRegex = new Regex(@"\berror\s+CS\d{4}\b", RegexOptions.IgnoreCase | RegexOptions.Compiled);
         private static readonly Regex ExceptionRegex = new Regex(@"^\S*Exception:", RegexOptions.Compiled);
 
@@ -25,23 +28,27 @@ namespace Unictl.Tools
         {
             var p = new ToolParams(parameters);
             var (ok, action, err) = p.GetRequired("action");
-            if (!ok) return new ErrorResponse(err);
+            if (!ok) return MissingAction(parameters, err);
 
             switch (action)
             {
-                case "tail": return DoTail(p);
-                case "search": return DoSearch(p);
-                case "errors": return DoErrors(p);
+                case "tail": return DoTail(parameters, p);
+                case "search": return DoSearch(parameters, p);
+                case "errors": return DoErrors(parameters, p);
                 case "game_logs":
                 case "clear_game_logs":
                     return DeprecatedGameLogsResponse(action);
                 default:
-                    return new ErrorResponse($"Unknown action: {action}");
+                    return UnknownAction(parameters, action);
             }
         }
 
-        private static object DoTail(ToolParams p)
+        private static object DoTail(JObject parameters, ToolParams p)
         {
+            var unknown = UnknownParams(parameters, CommonParams);
+            if (unknown.Length > 0)
+                return UnknownParamsResponse("tail", unknown, CommonParams);
+
             var lines = p.GetInt("lines", 50).Value;
             var logSource = ResolveEditorLogSource();
             var logPath = logSource.LogPath;
@@ -66,10 +73,22 @@ namespace Unictl.Tools
             }));
         }
 
-        private static object DoSearch(ToolParams p)
+        private static object DoSearch(JObject parameters, ToolParams p)
         {
+            var validParams = CommonParams.Concat(SearchParams).ToArray();
+            var unknown = UnknownParams(parameters, validParams);
+            if (unknown.Length > 0)
+                return UnknownParamsResponse("search", unknown, validParams);
+
             var (ok, pattern, err) = p.GetRequired("pattern");
-            if (!ok) return new ErrorResponse(err);
+            if (!ok) return new ErrorResponse($"{err}; valid params: {string.Join(", ", validParams)}", new
+            {
+                action = "search",
+                missing = new[] { "pattern" },
+                unknown,
+                valid_params = validParams,
+                valid_actions = ValidActions
+            });
 
             var lines = p.GetInt("lines", 100).Value;
             var logSource = ResolveEditorLogSource();
@@ -98,8 +117,12 @@ namespace Unictl.Tools
             }));
         }
 
-        private static object DoErrors(ToolParams p)
+        private static object DoErrors(JObject parameters, ToolParams p)
         {
+            var unknown = UnknownParams(parameters, CommonParams);
+            if (unknown.Length > 0)
+                return UnknownParamsResponse("errors", unknown, CommonParams);
+
             var lines = p.GetInt("lines", 100).Value;
             var logSource = ResolveEditorLogSource();
             var logPath = logSource.LogPath;
@@ -149,6 +172,60 @@ namespace Unictl.Tools
                 replacement = "editor_log",
                 replacement_actions = new[] { "tail", "search", "errors" }
             });
+        }
+
+        private static ErrorResponse MissingAction(JObject parameters, string message)
+        {
+            var validParams = CommonParams.Concat(SearchParams).ToArray();
+            var unknown = UnknownParams(parameters, validParams);
+            var suffix = unknown.Length > 0
+                ? $"; unknown params: {string.Join(", ", unknown)}"
+                : "";
+            return new ErrorResponse($"{message}{suffix}", new
+            {
+                missing = new[] { "action" },
+                unknown,
+                valid_params = validParams,
+                valid_actions = ValidActions
+            });
+        }
+
+        private static ErrorResponse UnknownAction(JObject parameters, string action)
+        {
+            var validParams = CommonParams.Concat(SearchParams).ToArray();
+            var unknown = UnknownParams(parameters, validParams);
+            return new ErrorResponse($"Unknown action: {action}. Valid actions: {string.Join(", ", ValidActions)}", new
+            {
+                action,
+                unknown,
+                valid_params = validParams,
+                valid_actions = ValidActions
+            });
+        }
+
+        private static ErrorResponse UnknownParamsResponse(string action, string[] unknown, string[] validParams)
+        {
+            return new ErrorResponse($"Unknown editor_log params for action={action}: {string.Join(", ", unknown)}", new
+            {
+                action,
+                unknown,
+                valid_params = validParams,
+                valid_actions = ValidActions
+            });
+        }
+
+        private static string[] UnknownParams(JObject parameters, IEnumerable<string> validParams)
+        {
+            if (parameters == null)
+                return Array.Empty<string>();
+
+            var valid = new HashSet<string>(validParams, StringComparer.OrdinalIgnoreCase);
+            valid.Add("_meta");
+            return parameters.Properties()
+                .Select(prop => prop.Name)
+                .Where(name => !valid.Contains(name))
+                .OrderBy(name => name, StringComparer.OrdinalIgnoreCase)
+                .ToArray();
         }
 
         private static List<string> ReadLinesShared(string path)
