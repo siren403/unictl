@@ -3,22 +3,34 @@ using System.Collections.Generic;
 using System.Linq;
 using Newtonsoft.Json.Linq;
 using UnityEditor;
+using UnityEditor.SceneManagement;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using Object = UnityEngine.Object;
 
 namespace Unictl.Tools
 {
-    [UnictlTool(Name = "hierarchy_tree", Description = "List the live Unity scene hierarchy, including Play Mode DontDestroyOnLoad roots.")]
+    [UnictlTool(Name = "hierarchy_tree", Description = "List live or static Unity scene/prefab hierarchies for GameObject path discovery.")]
     public static class HierarchyTreeTool
     {
         private const string TargetLive = "live";
+        private const string TargetSceneAsset = "scene_asset";
+        private const string TargetPrefabAsset = "prefab_asset";
         private const string ProbeName = "__unictl_hierarchy_tree_ddol_probe";
 
         public class Parameters
         {
-            [ToolParameter("Target hierarchy source. v1 supports live only.", Required = false, DefaultValue = "live", Enum = "live")]
+            [ToolParameter("Target hierarchy source: live, scene_asset, or prefab_asset. Default: live.", Required = false, DefaultValue = "live", Enum = "live,scene_asset,prefab_asset")]
             public string Target { get; set; }
+
+            [ToolParameter("Static asset path for target=scene_asset or target=prefab_asset.", Required = false)]
+            public string Asset { get; set; }
+
+            [ToolParameter("Scene asset path alias. Equivalent to target=scene_asset + asset=<path>.", Required = false)]
+            public string Scene { get; set; }
+
+            [ToolParameter("Prefab asset path alias. Equivalent to target=prefab_asset + asset=<path>.", Required = false)]
+            public string Prefab { get; set; }
 
             [ToolParameter("Maximum child depth to include. 0 returns roots only. Default: 3.", Required = false, DefaultValue = "3")]
             public int Depth { get; set; }
@@ -48,15 +60,7 @@ namespace Unictl.Tools
         public static object HandleCommand(JObject parameters)
         {
             var p = new ToolParams(parameters);
-            var target = p.Get("target", TargetLive);
-            if (!string.Equals(target, TargetLive, StringComparison.OrdinalIgnoreCase))
-            {
-                return new ErrorResponse($"Unsupported hierarchy_tree target: {target}", new
-                {
-                    valid_targets = new[] { TargetLive },
-                    requested_target = target
-                });
-            }
+            var target = ResolveTarget(p);
 
             var depth = p.GetInt("depth", 3).Value;
             if (depth < 0)
@@ -68,7 +72,7 @@ namespace Unictl.Tools
 
             var options = new Options
             {
-                Target = TargetLive,
+                Target = target,
                 MaxDepth = depth,
                 MaxNodes = maxNodes,
                 IncludeComponents = p.GetBool("include_components", false),
@@ -78,6 +82,21 @@ namespace Unictl.Tools
                 FilterName = p.Get("filter_name"),
                 FilterComponent = p.Get("filter_component")
             };
+
+            if (string.Equals(target, TargetSceneAsset, StringComparison.OrdinalIgnoreCase))
+                return HandleSceneAsset(p, options);
+            if (string.Equals(target, TargetPrefabAsset, StringComparison.OrdinalIgnoreCase))
+                return HandlePrefabAsset(p, options);
+            if (!string.Equals(target, TargetLive, StringComparison.OrdinalIgnoreCase))
+            {
+                return new ErrorResponse($"Unsupported hierarchy_tree target: {target}", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "invalid_hierarchy_tree_target",
+                    valid_targets = new[] { TargetLive, TargetSceneAsset, TargetPrefabAsset },
+                    requested_target = target
+                });
+            }
 
             var nodes = new List<NodeInfo>();
             var sceneSummaries = new List<object>();
@@ -100,6 +119,176 @@ namespace Unictl.Tools
                 filter_component = options.FilterComponent,
                 scenes = sceneSummaries,
                 dont_destroy_on_load = ddol,
+                nodes,
+                total_visited_nodes = state.TotalVisited,
+                returned_nodes = nodes.Count,
+                truncated = state.Truncated
+            });
+        }
+
+        private static object HandleSceneAsset(ToolParams p, Options options)
+        {
+            if (Application.isPlaying)
+            {
+                return new ErrorResponse("scene_asset hierarchy inspection is only supported in Edit Mode.", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "scene_asset_requires_edit_mode",
+                    target = TargetSceneAsset,
+                    is_playing = true
+                });
+            }
+
+            var assetPath = ResolveAssetPath(p, "scene");
+            var invalid = ValidateAssetPath(assetPath, ".unity", TargetSceneAsset);
+            if (invalid != null)
+                return invalid;
+
+            if (IsSceneLoaded(assetPath))
+            {
+                return new ErrorResponse("Scene asset is already loaded; use target=live or close it before static asset inspection.", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "scene_asset_already_loaded",
+                    target = TargetSceneAsset,
+                    asset_path = assetPath,
+                    recommended_command = "unictl command hierarchy_tree -p target=live"
+                });
+            }
+
+            var activeBefore = SceneManager.GetActiveScene();
+            var sceneCountBefore = SceneManager.sceneCount;
+            var loadedBefore = LoadedScenePaths();
+            var nodes = new List<NodeInfo>();
+            var state = new CollectionState();
+            var opened = default(Scene);
+            var closed = false;
+            var activeRestored = false;
+
+            try
+            {
+                opened = EditorSceneManager.OpenScene(assetPath, OpenSceneMode.Additive);
+                foreach (var root in opened.GetRootGameObjects())
+                    CollectNode(root, opened.name, opened.path, TargetSceneAsset, 0, root.name, options, nodes, state);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to inspect scene asset hierarchy: {ex.Message}", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "scene_asset_inspection_failed",
+                    target = TargetSceneAsset,
+                    asset_path = assetPath,
+                    exception_type = ex.GetType().Name
+                });
+            }
+            finally
+            {
+                if (opened.IsValid() && opened.isLoaded)
+                    closed = EditorSceneManager.CloseScene(opened, true);
+                activeRestored = IsActiveSceneEquivalent(activeBefore) ||
+                    RestoreActiveScene(activeBefore) ||
+                    IsActiveSceneEquivalent(activeBefore);
+            }
+
+            return new SuccessResponse("Scene asset hierarchy listed.", new
+            {
+                target = TargetSceneAsset,
+                asset_path = assetPath,
+                asset_type = "scene",
+                loaded_temporarily = true,
+                closed,
+                active_scene_restored = activeRestored,
+                scene_count_before = sceneCountBefore,
+                scene_count_after = SceneManager.sceneCount,
+                loaded_scenes_before = loadedBefore,
+                depth = options.MaxDepth,
+                max_nodes = options.MaxNodes,
+                include_components = options.IncludeComponents,
+                include_inactive = options.IncludeInactive,
+                include_internal = options.IncludeInternal,
+                filter_name = options.FilterName,
+                filter_component = options.FilterComponent,
+                nodes,
+                total_visited_nodes = state.TotalVisited,
+                returned_nodes = nodes.Count,
+                truncated = state.Truncated
+            });
+        }
+
+        private static object HandlePrefabAsset(ToolParams p, Options options)
+        {
+            if (Application.isPlaying)
+            {
+                return new ErrorResponse("prefab_asset hierarchy inspection is only supported in Edit Mode.", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "prefab_asset_requires_edit_mode",
+                    target = TargetPrefabAsset,
+                    is_playing = true
+                });
+            }
+
+            var assetPath = ResolveAssetPath(p, "prefab");
+            var invalid = ValidateAssetPath(assetPath, ".prefab", TargetPrefabAsset);
+            if (invalid != null)
+                return invalid;
+
+            var nodes = new List<NodeInfo>();
+            var state = new CollectionState();
+            GameObject root = null;
+            var unloaded = false;
+
+            try
+            {
+                root = PrefabUtility.LoadPrefabContents(assetPath);
+                if (root == null)
+                {
+                    return new ErrorResponse("Failed to load prefab asset contents.", new
+                    {
+                        error_kind = "invalid_param",
+                        reason = "prefab_asset_load_failed",
+                        target = TargetPrefabAsset,
+                        asset_path = assetPath
+                    });
+                }
+
+                CollectNode(root, root.scene.name, assetPath, TargetPrefabAsset, 0, root.name, options, nodes, state);
+            }
+            catch (Exception ex)
+            {
+                return new ErrorResponse($"Failed to inspect prefab asset hierarchy: {ex.Message}", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "prefab_asset_inspection_failed",
+                    target = TargetPrefabAsset,
+                    asset_path = assetPath,
+                    exception_type = ex.GetType().Name
+                });
+            }
+            finally
+            {
+                if (root != null)
+                {
+                    PrefabUtility.UnloadPrefabContents(root);
+                    unloaded = true;
+                }
+            }
+
+            return new SuccessResponse("Prefab asset hierarchy listed.", new
+            {
+                target = TargetPrefabAsset,
+                asset_path = assetPath,
+                asset_type = "prefab",
+                loaded_temporarily = true,
+                unloaded,
+                depth = options.MaxDepth,
+                max_nodes = options.MaxNodes,
+                include_components = options.IncludeComponents,
+                include_inactive = options.IncludeInactive,
+                include_internal = options.IncludeInternal,
+                filter_name = options.FilterName,
+                filter_component = options.FilterComponent,
                 nodes,
                 total_visited_nodes = state.TotalVisited,
                 returned_nodes = nodes.Count,
@@ -328,6 +517,124 @@ namespace Unictl.Tools
                 .Where(component => component != null)
                 .Select(component => component.GetType().Name)
                 .ToArray();
+        }
+
+        private static string ResolveTarget(ToolParams p)
+        {
+            var explicitTarget = p.Get("target");
+            if (!string.IsNullOrWhiteSpace(explicitTarget))
+                return explicitTarget;
+            if (!string.IsNullOrWhiteSpace(p.Get("scene")))
+                return TargetSceneAsset;
+            if (!string.IsNullOrWhiteSpace(p.Get("prefab")))
+                return TargetPrefabAsset;
+            return TargetLive;
+        }
+
+        private static string ResolveAssetPath(ToolParams p, string alias)
+        {
+            var value = p.Get("asset");
+            if (!string.IsNullOrWhiteSpace(value))
+                return NormalizeAssetPath(value);
+            return NormalizeAssetPath(p.Get(alias));
+        }
+
+        private static string NormalizeAssetPath(string path)
+        {
+            return string.IsNullOrWhiteSpace(path)
+                ? path
+                : path.Replace('\\', '/').Trim();
+        }
+
+        private static ErrorResponse ValidateAssetPath(string assetPath, string extension, string target)
+        {
+            if (string.IsNullOrWhiteSpace(assetPath))
+            {
+                return new ErrorResponse("Missing required parameter: asset", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "missing_asset_path",
+                    target,
+                    expected_extension = extension
+                });
+            }
+
+            if (!assetPath.StartsWith("Assets/", StringComparison.Ordinal) &&
+                !assetPath.StartsWith("Packages/", StringComparison.Ordinal))
+            {
+                return new ErrorResponse("asset must be a Unity project asset path under Assets/ or Packages/.", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "invalid_asset_path",
+                    target,
+                    asset_path = assetPath
+                });
+            }
+
+            if (!assetPath.EndsWith(extension, StringComparison.OrdinalIgnoreCase))
+            {
+                return new ErrorResponse($"asset must end with {extension} for target={target}.", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "invalid_asset_extension",
+                    target,
+                    asset_path = assetPath,
+                    expected_extension = extension
+                });
+            }
+
+            if (string.IsNullOrEmpty(AssetDatabase.AssetPathToGUID(assetPath)))
+            {
+                return new ErrorResponse($"Asset does not exist: {assetPath}", new
+                {
+                    error_kind = "invalid_param",
+                    reason = "asset_not_found",
+                    target,
+                    asset_path = assetPath
+                });
+            }
+
+            return null;
+        }
+
+        private static bool IsSceneLoaded(string assetPath)
+        {
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene.IsValid() && scene.isLoaded && scene.path == assetPath)
+                    return true;
+            }
+            return false;
+        }
+
+        private static string[] LoadedScenePaths()
+        {
+            var paths = new List<string>();
+            for (var i = 0; i < SceneManager.sceneCount; i++)
+            {
+                var scene = SceneManager.GetSceneAt(i);
+                if (scene.IsValid() && scene.isLoaded)
+                    paths.Add(scene.path);
+            }
+            return paths.ToArray();
+        }
+
+        private static bool RestoreActiveScene(Scene scene)
+        {
+            if (!scene.IsValid() || !scene.isLoaded)
+                return false;
+            return EditorSceneManager.SetActiveScene(scene);
+        }
+
+        private static bool IsActiveSceneEquivalent(Scene expected)
+        {
+            if (!expected.IsValid())
+                return true;
+            var active = SceneManager.GetActiveScene();
+            return active.IsValid() &&
+                active.path == expected.path &&
+                active.name == expected.name;
         }
 
         private sealed class Options

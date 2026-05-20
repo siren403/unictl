@@ -51,6 +51,13 @@ not be the richer path for common agent workflows:
   target=live`; add `-p include_components=true` and filters such as `-p
   filter_component=EventSystem` when looking for runtime or
   `DontDestroyOnLoad` objects.
+- If the object is in a scene or prefab asset that is not currently loaded, use
+  static asset hierarchy inspection instead of YAML grep:
+  `unictl command hierarchy_tree -p target=scene_asset -p
+  asset=Assets/Scenes/Lobby.unity` or `unictl command hierarchy_tree -p
+  target=prefab_asset -p asset=Assets/UI/Foo.prefab`. If a scene asset is
+  already loaded, use `target=live` so unsaved live state is not confused with
+  static asset contents.
 - If `editor.compile`, `editor.refresh`, `wait`, or editor-lane `test` fails
   with `error.kind=editor_compile_error_state`, treat Unity C# compile errors
   as the primary cause. Inspect `error.context.compile_errors`, fix those

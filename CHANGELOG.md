@@ -31,6 +31,8 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - Added custom build method support via `unictl build --method
   Namespace.Type.Method`, plus public `UnictlBuildContext` /
   `UnictlBuildScope` APIs for scope-based lifecycle reporting.
+- Added static scene and prefab asset hierarchy inspection to
+  `hierarchy_tree` via `target=scene_asset` and `target=prefab_asset`.
 
 ### Fixed
 
