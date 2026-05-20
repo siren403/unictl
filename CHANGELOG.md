@@ -11,6 +11,14 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+---
+
+## [0.7.12] - 2026-05-20
+
+---
+
+## [0.7.12] - 2026-05-20
+
 ### Fixed
 
 - Clarified `unictl build --method` custom build reporting guidance across

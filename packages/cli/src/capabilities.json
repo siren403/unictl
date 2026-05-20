@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "unictl_version": "0.7.11",
+  "unictl_version": "0.7.12",
   "subcommands": [
     {
       "name": "build",
