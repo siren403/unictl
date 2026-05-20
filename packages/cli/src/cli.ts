@@ -48,10 +48,131 @@ function output(data: unknown): void {
   console.log(JSON.stringify(data));
 }
 
+const ATTACH_PROPERTY_VALUE_KEYS = [
+  "asset",
+  "scene_ref",
+  "prefab_ref",
+  "int",
+  "string",
+  "bool",
+  "float",
+  "enum_index",
+  "enum_name",
+  "null",
+] as const;
+
+const EDITOR_SUBCOMMANDS = [
+  "status",
+  "quit",
+  "open",
+  "restart",
+  "compile",
+  "play",
+  "stop",
+  "refresh",
+] as const;
+
 function outputErrorAndExit(error: unknown): never {
   const message = error instanceof Error ? error.message : String(error);
   output({ error: message });
   process.exit(1);
+}
+
+function recordOrNull(value: unknown): Record<string, unknown> | null {
+  return value && typeof value === "object" ? value as Record<string, unknown> : null;
+}
+
+function levenshteinDistance(a: string, b: string): number {
+  const rows = a.length + 1;
+  const cols = b.length + 1;
+  const dp = Array.from({ length: rows }, () => Array<number>(cols).fill(0));
+
+  for (let i = 0; i < rows; i++) dp[i][0] = i;
+  for (let j = 0; j < cols; j++) dp[0][j] = j;
+
+  for (let i = 1; i < rows; i++) {
+    for (let j = 1; j < cols; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      dp[i][j] = Math.min(
+        dp[i - 1][j] + 1,
+        dp[i][j - 1] + 1,
+        dp[i - 1][j - 1] + cost,
+      );
+    }
+  }
+
+  return dp[a.length][b.length];
+}
+
+function suggestEditorSubcommands(input: string): string[] {
+  const normalized = input.toLowerCase();
+  return EDITOR_SUBCOMMANDS
+    .map((name) => ({ name, distance: levenshteinDistance(normalized, name) }))
+    .filter((entry) => entry.distance <= 2)
+    .sort((a, b) => a.distance - b.distance || a.name.localeCompare(b.name))
+    .slice(0, 3)
+    .map((entry) => entry.name);
+}
+
+function buildEditorUnknownSubcommandError(rawArgs: string[]): Record<string, unknown> {
+  const subcommand = rawArgs[1] ?? "";
+  const suggestions = suggestEditorSubcommands(subcommand);
+  const recommendedCommands = suggestions.map((name) => `unictl editor ${name}`);
+
+  if (subcommand === "await") {
+    const reachable = rawArgs.includes("--reachable");
+    const timeoutIndex = rawArgs.indexOf("--timeout");
+    const timeout = timeoutIndex >= 0 && rawArgs[timeoutIndex + 1] && !rawArgs[timeoutIndex + 1].startsWith("-")
+      ? rawArgs[timeoutIndex + 1]
+      : null;
+    const waitState = reachable ? "reachable" : "idle";
+    recommendedCommands.unshift(
+      `unictl wait ${waitState}${timeout ? ` --timeout ${timeout}` : ""}`,
+      `unictl editor open --wait ${waitState}${timeout ? ` --timeout ${timeout}` : ""}`,
+    );
+  }
+
+  return {
+    ok: false,
+    error: {
+      kind: "unknown_subcommand",
+      command: "editor",
+      subcommand,
+      message: `Unknown editor subcommand '${subcommand}'.`,
+      suggestions,
+      valid_subcommands: [...EDITOR_SUBCOMMANDS],
+      recommended_commands: recommendedCommands,
+    },
+  };
+}
+
+function enrichAttachPropertyInvalidValue(response: unknown): unknown {
+  const obj = recordOrNull(response);
+  if (!obj || obj.success !== false) return response;
+
+  const data = recordOrNull(obj.data);
+  if (data?.error_kind !== "invalid_value") return response;
+
+  const example = { string: "foo" };
+  const examples = [
+    { string: "foo" },
+    { int: 42 },
+    { asset: "Assets/Path/To/Prefab.prefab" },
+  ];
+  const message = typeof obj.message === "string" && obj.message.includes("e.g.")
+    ? obj.message
+    : `${String(obj.message ?? "`value` is invalid")} - e.g. {\"string\":\"foo\"}, {\"int\":42}, {\"asset\":\"Assets/Path/To/Prefab.prefab\"}`;
+
+  return {
+    ...obj,
+    message,
+    data: {
+      ...data,
+      valid_keys: data.valid_keys ?? [...ATTACH_PROPERTY_VALUE_KEYS],
+      example: data.example ?? example,
+      examples: data.examples ?? examples,
+    },
+  };
 }
 
 /**
@@ -881,16 +1002,19 @@ const commandCmd = defineCommand({
         );
       }
       const response = await command(toolName, params, { project: args.project });
+      const displayResponse = toolName === "attach_property"
+        ? enrichAttachPropertyInvalidValue(response)
+        : response;
       if (format === "text" && toolName === "editor_log") {
-        if (!emitEditorLogText(response)) output(response);
+        if (!emitEditorLogText(displayResponse)) output(displayResponse);
       } else {
-        output(response);
+        output(displayResponse);
       }
       if (
-        response &&
-        typeof response === "object" &&
-        (((response as { success?: unknown }).success === false) ||
-          ((response as { ok?: unknown }).ok === false))
+        displayResponse &&
+        typeof displayResponse === "object" &&
+        (((displayResponse as { success?: unknown }).success === false) ||
+          ((displayResponse as { ok?: unknown }).ok === false))
       ) {
         process.exit(1);
       }
@@ -1221,6 +1345,30 @@ if (rawArgv[0] === "build" && rawArgv[1] === "status") {
 
 if (rawArgv[0] === "build" && rawArgv[1] === "cancel") {
   await runBuildCancelCli(normalizeKnownFlags(rawArgv.slice(2)));
+}
+
+if (
+  rawArgv[0] === "editor" &&
+  rawArgv[1] &&
+  !rawArgv[1].startsWith("-") &&
+  !EDITOR_SUBCOMMANDS.includes(rawArgv[1] as typeof EDITOR_SUBCOMMANDS[number])
+) {
+  const error = buildEditorUnknownSubcommandError(rawArgv);
+  if (rawArgv.includes("--json")) {
+    output(error);
+  } else {
+    const payload = error.error as Record<string, unknown>;
+    process.stderr.write(`${payload.message}\n`);
+    const commands = payload.recommended_commands as string[];
+    if (commands.length > 0) {
+      process.stderr.write("Did you mean:\n");
+      for (const command of commands) {
+        process.stderr.write(`  ${command}\n`);
+      }
+    }
+    process.stderr.write(`Valid editor subcommands: ${EDITOR_SUBCOMMANDS.join(", ")}\n`);
+  }
+  process.exit(1);
 }
 
 runMain(main, { rawArgs: normalizeKnownFlags(rawArgv) });

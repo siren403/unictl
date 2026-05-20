@@ -28,6 +28,11 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 - `editor_log` now reports unknown parameters, valid parameter names, and valid
   actions when callers omit or misspell the required `action` parameter.
+- `unictl editor <unknown>` now returns close subcommand suggestions and
+  machine-readable remediation instead of only citty's generic unknown command
+  output.
+- `unictl command attach_property` invalid `value` responses now include valid
+  wrapper keys and examples such as `{"string":"foo"}` and `{"int":42}`.
 - `unictl build --wait` and `build_status` now expose normalized lifecycle
   fields (`queued`, `running`, `succeeded`, `failed`, `cancelled`) instead of
   requiring agents to interpret raw progress-file states.
