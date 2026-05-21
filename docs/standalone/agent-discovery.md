@@ -50,6 +50,10 @@ not be the richer path for common agent workflows:
   `Library/unictl-state/editor-current.log` exists, the CLI reads that file
   directly and marks `data.fallback_kind=cli_project_log_file`. Treat that as
   a log-read fallback, not proof that the editor itself is dead.
+- For `editor_log -p action=errors`, inspect `data.freshness`. When compile
+  lifecycle log offsets are available, stale compile errors from before the
+  latest compile boundary are omitted and counted in
+  `data.freshness.stale_total_omitted`.
 - Use `unictl command editor_log -p action=tail --format text` only when a
   shell pipeline needs raw log lines. Keep the default JSON output for
   structured automation.

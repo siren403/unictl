@@ -62,6 +62,8 @@ namespace Unictl
         private static string s_compileStartedAt;
         private static string s_compileFinishedAt;
         private static string s_compileContext;
+        private static long? s_compileStartedLogPosition;
+        private static long? s_compileFinishedLogPosition;
         private static JObject s_lastCompileRequest;
 
 #if UNICTL_HEARTBEAT_PERF
@@ -123,6 +125,8 @@ namespace Unictl
                 ["started_at"] = s_compileStartedAt == null ? JValue.CreateNull() : new JValue(s_compileStartedAt),
                 ["finished_at"] = s_compileFinishedAt == null ? JValue.CreateNull() : new JValue(s_compileFinishedAt),
                 ["context"] = s_compileContext == null ? JValue.CreateNull() : new JValue(s_compileContext),
+                ["started_log_position"] = s_compileStartedLogPosition.HasValue ? new JValue(s_compileStartedLogPosition.Value) : JValue.CreateNull(),
+                ["finished_log_position"] = s_compileFinishedLogPosition.HasValue ? new JValue(s_compileFinishedLogPosition.Value) : JValue.CreateNull(),
                 ["last_request"] = s_lastCompileRequest == null ? JValue.CreateNull() : (JToken)s_lastCompileRequest.DeepClone(),
             };
         }
@@ -134,6 +138,8 @@ namespace Unictl
             s_compileStartedAt = DateTime.UtcNow.ToString("o");
             s_compileFinishedAt = null;
             s_compileContext = context?.ToString();
+            s_compileStartedLogPosition = CaptureProjectEditorLogPosition();
+            s_compileFinishedLogPosition = null;
             WriteCompileLifecycle();
             RefreshPhase(forceEmit: true);
         }
@@ -143,6 +149,7 @@ namespace Unictl
             s_compileActive = false;
             s_compileFinishedAt = DateTime.UtcNow.ToString("o");
             s_compileContext = context?.ToString() ?? s_compileContext;
+            s_compileFinishedLogPosition = CaptureProjectEditorLogPosition();
             WriteCompileLifecycle();
             RefreshPhase(forceEmit: true);
         }
@@ -325,6 +332,12 @@ namespace Unictl
                 s_compileContext = existing["context"]?.Type == JTokenType.String
                     ? existing["context"]?.ToString()
                     : null;
+                s_compileStartedLogPosition = existing["started_log_position"]?.Type == JTokenType.Integer
+                    ? existing["started_log_position"]?.ToObject<long>()
+                    : null;
+                s_compileFinishedLogPosition = existing["finished_log_position"]?.Type == JTokenType.Integer
+                    ? existing["finished_log_position"]?.ToObject<long>()
+                    : null;
                 s_lastCompileRequest = existing["last_request"] as JObject;
             }
             catch
@@ -334,6 +347,8 @@ namespace Unictl
                 s_compileStartedAt = null;
                 s_compileFinishedAt = null;
                 s_compileContext = null;
+                s_compileStartedLogPosition = null;
+                s_compileFinishedLogPosition = null;
                 s_lastCompileRequest = null;
             }
         }
@@ -341,6 +356,19 @@ namespace Unictl
         private static string GetCompileLifecyclePath()
         {
             return Path.Combine(Path.GetDirectoryName(Application.dataPath), "Library", "unictl-state", "compile-lifecycle.json");
+        }
+
+        private static long? CaptureProjectEditorLogPosition()
+        {
+            try
+            {
+                var path = Path.Combine(Path.GetDirectoryName(Application.dataPath), "Library", "unictl-state", "editor-current.log");
+                return File.Exists(path) ? new FileInfo(path).Length : (long?)null;
+            }
+            catch
+            {
+                return null;
+            }
         }
 
         private static void AppendField(StringBuilder sb, string key, string value)

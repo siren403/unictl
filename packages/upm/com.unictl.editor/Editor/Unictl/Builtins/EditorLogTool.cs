@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.RegularExpressions;
 using Newtonsoft.Json.Linq;
 using UnityEngine;
@@ -57,9 +58,9 @@ namespace Unictl.Tools
             if (!readiness.Usable)
                 return readiness.ToErrorResponse();
 
-            var allLines = ReadLinesShared(logPath);
+            var allLines = ReadLogEntriesShared(logPath);
             var start = Math.Max(0, allLines.Count - lines);
-            var result = allLines.Skip(start).ToArray();
+            var result = allLines.Skip(start).Select(entry => entry.Text).ToArray();
 
             return new SuccessResponse("Editor log tail (file-based, includes compile errors)", readiness.With(new
             {
@@ -98,11 +99,10 @@ namespace Unictl.Tools
             if (!readiness.Usable)
                 return readiness.ToErrorResponse();
 
-            var matches = ReadLinesShared(logPath)
-                .Select((line, index) => new { line, index })
-                .Where(x => x.line.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
+            var matches = ReadLogEntriesShared(logPath)
+                .Where(entry => entry.Text.IndexOf(pattern, StringComparison.OrdinalIgnoreCase) >= 0)
                 .TakeLast(lines)
-                .Select(x => new { line_number = x.index + 1, text = x.line })
+                .Select(entry => new { line_number = entry.LineNumber, log_position = entry.Offset, text = entry.Text })
                 .ToArray();
 
             return new SuccessResponse($"Found {matches.Length} matches for '{pattern}' (file-based)", readiness.With(new
@@ -131,25 +131,53 @@ namespace Unictl.Tools
             if (!readiness.Usable)
                 return readiness.ToErrorResponse();
 
-            var allLines = ReadLinesShared(logPath);
+            var allLines = ReadLogEntriesShared(logPath);
+            var lifecycle = UnictlHeartbeat.CompileLifecycleSnapshot();
+            var boundary = lifecycle["started_log_position"]?.Type == JTokenType.Integer
+                ? lifecycle["started_log_position"]?.ToObject<long>()
+                : null;
+            var hasBoundary = boundary.HasValue && boundary.Value >= 0 && boundary.Value <= new FileInfo(logPath).Length;
             var compileErrors = new List<object>();
             var exceptions = new List<object>();
+            var staleCompileErrors = 0;
+            var staleExceptions = 0;
 
-            for (int i = 0; i < allLines.Count; i++)
+            foreach (var entry in allLines)
             {
-                var line = allLines[i];
-                if (CompileErrorRegex.IsMatch(line))
-                    compileErrors.Add(new { line_number = i + 1, text = line });
-                else if (ExceptionRegex.IsMatch(line))
-                    exceptions.Add(new { line_number = i + 1, text = line });
+                var stale = hasBoundary && entry.Offset < boundary.Value;
+                if (CompileErrorRegex.IsMatch(entry.Text))
+                {
+                    if (stale) staleCompileErrors++;
+                    else compileErrors.Add(new { line_number = entry.LineNumber, log_position = entry.Offset, text = entry.Text });
+                }
+                else if (ExceptionRegex.IsMatch(entry.Text))
+                {
+                    if (stale) staleExceptions++;
+                    else exceptions.Add(new { line_number = entry.LineNumber, log_position = entry.Offset, text = entry.Text });
+                }
             }
 
             var compileTrimmed = compileErrors.TakeLast(lines).ToArray();
             var exceptionsTrimmed = exceptions.TakeLast(lines).ToArray();
             var total = compileTrimmed.Length + exceptionsTrimmed.Length;
+            var omitted = staleCompileErrors + staleExceptions;
+            var freshness = new
+            {
+                filter_mode = hasBoundary ? "latest_compile_started_log_position" : "entire_current_session_no_compile_boundary",
+                stale_possible = !hasBoundary,
+                log_position_boundary = hasBoundary ? boundary : null,
+                stale_compile_errors_omitted = staleCompileErrors,
+                stale_exceptions_omitted = staleExceptions,
+                stale_total_omitted = omitted,
+                compile_lifecycle = lifecycle
+            };
 
             return new SuccessResponse(
-                total == 0 ? "No compile errors or exceptions found" : $"Found {compileTrimmed.Length} compile errors, {exceptionsTrimmed.Length} exceptions",
+                total == 0
+                    ? (omitted > 0
+                        ? $"No current compile errors or exceptions found; omitted {omitted} stale pre-compile-boundary entries"
+                        : "No compile errors or exceptions found")
+                    : $"Found {compileTrimmed.Length} current compile errors, {exceptionsTrimmed.Length} current exceptions",
                 readiness.With(new
                 {
                     source = logSource.Source,
@@ -157,7 +185,8 @@ namespace Unictl.Tools
                     log_path = logPath,
                     compile_errors = compileTrimmed,
                     exceptions = exceptionsTrimmed,
-                    total_count = total
+                    total_count = total,
+                    freshness
                 }));
         }
 
@@ -228,15 +257,52 @@ namespace Unictl.Tools
                 .ToArray();
         }
 
-        private static List<string> ReadLinesShared(string path)
+        private static List<LogEntry> ReadLogEntriesShared(string path)
         {
+            byte[] bytes;
             using var stream = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite);
-            using var reader = new StreamReader(stream);
-            var lines = new List<string>();
-            string line;
-            while ((line = reader.ReadLine()) != null)
-                lines.Add(line);
-            return lines;
+            using (var memory = new MemoryStream())
+            {
+                stream.CopyTo(memory);
+                bytes = memory.ToArray();
+            }
+
+            var entries = new List<LogEntry>();
+            var lineStart = 0;
+            var lineNumber = 1;
+            for (var i = 0; i < bytes.Length; i++)
+            {
+                if (bytes[i] != (byte)'\n')
+                    continue;
+
+                var lineEnd = i > lineStart && bytes[i - 1] == (byte)'\r' ? i - 1 : i;
+                entries.Add(new LogEntry
+                {
+                    LineNumber = lineNumber,
+                    Offset = lineStart,
+                    Text = DecodeLine(bytes, lineStart, lineEnd - lineStart, lineNumber == 1)
+                });
+                lineStart = i + 1;
+                lineNumber++;
+            }
+
+            if (lineStart < bytes.Length)
+            {
+                entries.Add(new LogEntry
+                {
+                    LineNumber = lineNumber,
+                    Offset = lineStart,
+                    Text = DecodeLine(bytes, lineStart, bytes.Length - lineStart, lineNumber == 1)
+                });
+            }
+
+            return entries;
+        }
+
+        private static string DecodeLine(byte[] bytes, int offset, int count, bool firstLine)
+        {
+            var text = Encoding.UTF8.GetString(bytes, offset, count);
+            return firstLine ? text.TrimStart('\uFEFF') : text;
         }
 
         private static LogSource ResolveEditorLogSource()
@@ -380,6 +446,13 @@ namespace Unictl.Tools
             public string ProjectLogPath;
             public bool FallbackUsed;
             public string Warning;
+        }
+
+        private class LogEntry
+        {
+            public int LineNumber;
+            public long Offset;
+            public string Text;
         }
 
         private class LogReadiness

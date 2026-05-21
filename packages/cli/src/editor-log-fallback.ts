@@ -9,6 +9,12 @@ const VALID_ACTIONS = ["tail", "search", "errors"] as const;
 const COMPILE_ERROR_RE = /\berror\s+CS\d{4}\b/i;
 const EXCEPTION_RE = /^\S*Exception:/;
 
+type LogEntry = {
+  line_number: number;
+  log_position: number;
+  text: string;
+};
+
 function stringParam(params: JsonRecord | undefined, key: string): string | undefined {
   const value = params?.[key];
   return typeof value === "string" ? value : undefined;
@@ -25,6 +31,54 @@ function asOriginalError(error: unknown): JsonRecord {
   return {
     message: error instanceof Error ? error.message : String(error),
   };
+}
+
+function readCompileLifecycle(path: string): JsonRecord | undefined {
+  if (!existsSync(path)) return undefined;
+  try {
+    return JSON.parse(readFileSync(path, "utf-8").replace(/^\uFEFF/, "")) as JsonRecord;
+  } catch {
+    return undefined;
+  }
+}
+
+function numberField(record: JsonRecord | undefined, key: string): number | undefined {
+  const value = record?.[key];
+  return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readLogEntries(path: string): LogEntry[] {
+  const bytes = readFileSync(path);
+  const entries: LogEntry[] = [];
+  let lineStart = 0;
+  let lineNumber = 1;
+
+  const decode = (start: number, end: number, firstLine: boolean) => {
+    const text = bytes.subarray(start, end).toString("utf-8");
+    return firstLine ? text.replace(/^\uFEFF/, "") : text;
+  };
+
+  for (let i = 0; i < bytes.length; i++) {
+    if (bytes[i] !== 0x0a) continue;
+    const lineEnd = i > lineStart && bytes[i - 1] === 0x0d ? i - 1 : i;
+    entries.push({
+      line_number: lineNumber,
+      log_position: lineStart,
+      text: decode(lineStart, lineEnd, lineNumber === 1),
+    });
+    lineStart = i + 1;
+    lineNumber++;
+  }
+
+  if (lineStart < bytes.length) {
+    entries.push({
+      line_number: lineNumber,
+      log_position: lineStart,
+      text: decode(lineStart, bytes.length, lineNumber === 1),
+    });
+  }
+
+  return entries;
 }
 
 function baseData(args: {
@@ -105,7 +159,8 @@ export function runEditorLogFileFallback(args: {
   }
 
   const { projectRoot } = getProjectPaths(args.project);
-  const logPath = getProjectEditorLogFiles(projectRoot).editor_log_file;
+  const logFiles = getProjectEditorLogFiles(projectRoot);
+  const logPath = logFiles.editor_log_file;
   if (!existsSync(logPath)) {
     return unavailable({
       action,
@@ -115,9 +170,9 @@ export function runEditorLogFileFallback(args: {
     });
   }
 
-  const lines = readFileSync(logPath, "utf-8").split(/\r?\n/);
-  if (lines.length > 0 && lines[lines.length - 1] === "") lines.pop();
+  const entries = readLogEntries(logPath);
   const lineLimit = intParam(args.params, "lines", action === "tail" ? 50 : 100);
+  const lines = entries.map((entry) => entry.text);
   const common = baseData({
     projectRoot,
     logPath,
@@ -161,26 +216,52 @@ export function runEditorLogFileFallback(args: {
     };
   }
 
-  const compileErrors = lines
-    .map((line, index) => ({ line_number: index + 1, text: line }))
-    .filter((entry) => COMPILE_ERROR_RE.test(entry.text))
-    .slice(-lineLimit);
-  const exceptions = lines
-    .map((line, index) => ({ line_number: index + 1, text: line }))
-    .filter((entry) => EXCEPTION_RE.test(entry.text))
-    .slice(-lineLimit);
+  const lifecycle = readCompileLifecycle(logFiles.compile_lifecycle_file);
+  const boundary = numberField(lifecycle, "started_log_position");
+  const logSize = statSync(logPath).size;
+  const hasBoundary = boundary !== undefined && boundary >= 0 && boundary <= logSize;
+  let staleCompileErrors = 0;
+  let staleExceptions = 0;
+  const compileErrors: LogEntry[] = [];
+  const exceptions: LogEntry[] = [];
+
+  for (const entry of entries) {
+    const stale = hasBoundary && entry.log_position < boundary;
+    if (COMPILE_ERROR_RE.test(entry.text)) {
+      if (stale) staleCompileErrors++;
+      else compileErrors.push(entry);
+    } else if (EXCEPTION_RE.test(entry.text)) {
+      if (stale) staleExceptions++;
+      else exceptions.push(entry);
+    }
+  }
+
+  const compileErrorsTrimmed = compileErrors.slice(-lineLimit);
+  const exceptionsTrimmed = exceptions.slice(-lineLimit);
+  const staleTotal = staleCompileErrors + staleExceptions;
   const total = compileErrors.length + exceptions.length;
 
   return {
     success: true,
     message: total === 0
-      ? "No compile errors or exceptions found (CLI file fallback after IPC failure)"
-      : `Found ${compileErrors.length} compile errors, ${exceptions.length} exceptions (CLI file fallback after IPC failure)`,
+      ? staleTotal > 0
+        ? `No current compile errors or exceptions found; omitted ${staleTotal} stale pre-compile-boundary entries (CLI file fallback after IPC failure)`
+        : "No compile errors or exceptions found (CLI file fallback after IPC failure)"
+      : `Found ${compileErrorsTrimmed.length} current compile errors, ${exceptionsTrimmed.length} current exceptions (CLI file fallback after IPC failure)`,
     data: {
       ...common,
-      compile_errors: compileErrors,
-      exceptions,
-      total_count: total,
+      compile_errors: compileErrorsTrimmed,
+      exceptions: exceptionsTrimmed,
+      total_count: compileErrorsTrimmed.length + exceptionsTrimmed.length,
+      freshness: {
+        filter_mode: hasBoundary ? "latest_compile_started_log_position" : "entire_current_session_no_compile_boundary",
+        stale_possible: !hasBoundary,
+        log_position_boundary: hasBoundary ? boundary : null,
+        stale_compile_errors_omitted: staleCompileErrors,
+        stale_exceptions_omitted: staleExceptions,
+        stale_total_omitted: staleTotal,
+        compile_lifecycle: lifecycle ?? null,
+      },
     },
   };
 }

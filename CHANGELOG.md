@@ -11,6 +11,12 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 
 ## [Unreleased]
 
+### Fixed
+
+- `editor_log action=errors` now filters stale diagnostics from before the
+  latest compile lifecycle log boundary and reports freshness metadata so
+  agents do not fail validation on compile errors that were already fixed.
+
 ---
 
 ## [0.7.13] - 2026-05-20
