@@ -16,6 +16,9 @@ Breaking changes in a release require a corresponding entry in [MIGRATION.md](MI
 - `editor_log action=errors` now filters stale diagnostics from before the
   latest compile lifecycle log boundary and reports freshness metadata so
   agents do not fail validation on compile errors that were already fixed.
+- `mise run unictl -- ... -p key=value` now forwards `-p` arguments correctly
+  on PowerShell instead of letting the task wrapper interpret them as ambiguous
+  script parameters.
 
 ---
 
